@@ -92,14 +92,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Trace ID middleware — inject X-Request-ID on every response
+    @app.middleware("http")
+    async def trace_id_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]
+        trace_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        request.state.trace_id = trace_id
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = trace_id
+        return response
+
     # Exception handlers
     app.add_exception_handler(Exception, global_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
     # Register routers
     from src.api.routers.health import router as health_router
+    from src.api.routers.auth import router as auth_router
+    from src.api.routers.documents import router as documents_router
+    from src.api.routers.tasks import router as tasks_router
+    from src.api.routers.compare import router as compare_router
+    from src.api.routers.knowledge import router as knowledge_router
 
     app.include_router(health_router)
+    app.include_router(auth_router)
+    app.include_router(documents_router)
+    app.include_router(tasks_router)
+    app.include_router(compare_router)
+    app.include_router(knowledge_router)
 
     return app
 

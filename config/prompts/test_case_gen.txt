@@ -1,0 +1,18 @@
+Generate comprehensive test cases for chip {chip_name}.
+
+Parameters:
+{parameters}
+
+Datasheet context:
+{context}
+
+Generate test cases as a JSON array. Each test case must have:
+- "test_item": short test name
+- "parameter": which parameter is being tested
+- "condition": test conditions (e.g., "VDD=3.3V, T=25°C")
+- "expected_value": expected result with tolerance
+- "test_method": how to test (e.g., "DMM measurement", "oscilloscope")
+- "priority": "high", "medium", or "low"
+
+Generate at least 10 test cases covering electrical, timing, and functional parameters.
+Return ONLY the JSON array.
