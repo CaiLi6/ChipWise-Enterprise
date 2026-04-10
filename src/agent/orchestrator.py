@@ -1,38 +1,39 @@
-"""Agent Orchestrator — ReAct main loop skeleton (§4.8.1).
+"""Agent Orchestrator — ReAct main loop (§4.8.1, task 2C2).
 
-Implements the Thought → Tool Call → Observation → Final Answer cycle.
-Phase 2 (task 2C2) fills in real LLM integration and advanced features.
+Drives the Thought → Tool Calls → Observation → Final Answer cycle.
+Supports parallel tool execution, per-tool timeout, token budget, and
+TraceContext recording.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any
 
+from src.agent.prompt_builder import PromptBuilder
 from src.agent.tool_registry import ToolRegistry
 from src.agent.safety.token_budget import TokenBudget
+from src.libs.llm.base import BaseLLM, LLMResponse, ToolCall
+from src.observability.trace_context import TraceContext
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MAX_ITERATIONS = 5
-DEFAULT_MAX_TOKENS = 8192
-
 
 # ------------------------------------------------------------------
-# LLM protocol — allows mocking in tests
+# Configuration
 # ------------------------------------------------------------------
-class LLMClient(Protocol):
-    """Minimal protocol a language model client must satisfy."""
-
-    async def chat(
-        self,
-        messages: list[dict[str, Any]],
-        tools: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
-        """Return an OpenAI-compatible chat completion response dict."""
-        ...
+@dataclass
+class AgentConfig:
+    """Runtime configuration for the Agent orchestrator."""
+    max_iterations: int = 5
+    max_total_tokens: int = 8192
+    parallel_tool_calls: bool = True
+    temperature: float = 0.1
+    tool_timeout: float = 30.0
+    llm_role: str = "primary"
 
 
 # ------------------------------------------------------------------
@@ -46,17 +47,21 @@ class ToolCallRequest:
 
 
 @dataclass
-class Iteration:
+class AgentStep:
+    """One iteration of the ReAct loop."""
     thought: str = ""
     tool_calls: list[ToolCallRequest] = field(default_factory=list)
     observations: list[dict[str, Any]] = field(default_factory=list)
+    token_usage: int = 0
 
 
 @dataclass
 class AgentResult:
+    """Final output of the orchestrator."""
     answer: str
-    iterations: list[Iteration] = field(default_factory=list)
+    tool_calls_log: list[AgentStep] = field(default_factory=list)
     total_tokens: int = 0
+    iterations: int = 0
     stopped_reason: str = "complete"
 
 
@@ -68,101 +73,206 @@ class AgentOrchestrator:
 
     def __init__(
         self,
-        llm: LLMClient,
-        registry: ToolRegistry,
-        max_iterations: int = DEFAULT_MAX_ITERATIONS,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
+        llm: BaseLLM,
+        tool_registry: ToolRegistry,
+        config: AgentConfig | None = None,
+        prompt_builder: PromptBuilder | None = None,
     ) -> None:
         self.llm = llm
-        self.registry = registry
-        self.max_iterations = max_iterations
-        self.budget = TokenBudget(max_tokens)
+        self.registry = tool_registry
+        self.config = config or AgentConfig()
+        self.prompt_builder = prompt_builder or PromptBuilder()
 
-    async def run(self, user_query: str, system_prompt: str = "") -> AgentResult:
-        messages: list[dict[str, Any]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": user_query})
-
+    async def run(
+        self,
+        query: str,
+        conversation_history: list[dict[str, Any]] | None = None,
+        trace: TraceContext | None = None,
+    ) -> AgentResult:
+        """Execute the ReAct loop for *query*."""
+        budget = TokenBudget(self.config.max_total_tokens)
         tools_schema = self.registry.get_openai_tools_schema()
-        iterations: list[Iteration] = []
 
-        for i in range(self.max_iterations):
-            if self.budget.exhausted:
+        # Build messages
+        system_prompt = self.prompt_builder.build_system_prompt(tools_schema)
+        messages = self.prompt_builder.build_messages(
+            system_prompt,
+            conversation_history or [],
+            query,
+        )
+
+        steps: list[AgentStep] = []
+
+        for i in range(self.config.max_iterations):
+            # Check budget
+            if budget.exhausted:
                 logger.warning("Token budget exhausted at iteration %d", i)
+                if trace:
+                    trace.record_stage("budget_exhausted", {"iteration": i})
                 return AgentResult(
                     answer="I've used all available tokens. Here's what I found so far.",
-                    iterations=iterations,
-                    total_tokens=self.budget.used,
+                    tool_calls_log=steps,
+                    total_tokens=budget.used,
+                    iterations=i,
                     stopped_reason="token_budget_exhausted",
                 )
 
-            response = await self.llm.chat(messages, tools=tools_schema or None)
-            usage = response.get("usage", {})
-            self.budget.consume(usage.get("total_tokens", 0))
+            # Call LLM
+            llm_response: LLMResponse = await self.llm.chat(
+                messages,
+                tools=tools_schema or None,
+                temperature=self.config.temperature,
+            )
+            token_count = llm_response.usage.get("total_tokens", 0)
+            budget.consume(token_count)
 
-            choice = response.get("choices", [{}])[0]
-            message = choice.get("message", {})
-            finish_reason = choice.get("finish_reason", "stop")
+            step = AgentStep(
+                thought=llm_response.text or "",
+                token_usage=token_count,
+            )
 
-            iteration = Iteration(thought=message.get("content", "") or "")
-
-            # Check for tool calls
-            tool_calls_raw = message.get("tool_calls", [])
-            if not tool_calls_raw or finish_reason == "stop":
-                # Final answer
-                iterations.append(iteration)
+            # No tool calls → final answer
+            if not llm_response.tool_calls:
+                steps.append(step)
+                if trace:
+                    trace.record_stage("final_answer", {
+                        "iteration": i,
+                        "tokens": token_count,
+                    })
                 return AgentResult(
-                    answer=message.get("content", ""),
-                    iterations=iterations,
-                    total_tokens=self.budget.used,
+                    answer=llm_response.text or "",
+                    tool_calls_log=steps,
+                    total_tokens=budget.used,
+                    iterations=i + 1,
                     stopped_reason="complete",
                 )
 
             # Process tool calls
-            messages.append(message)
-            for tc in tool_calls_raw:
-                func = tc.get("function", {})
-                call_id = tc.get("id", "")
-                tool_name = func.get("name", "")
-                try:
-                    arguments = json.loads(func.get("arguments", "{}"))
-                except json.JSONDecodeError:
-                    arguments = {}
+            # Add assistant message with tool_calls to conversation
+            assistant_msg = self._build_assistant_message(llm_response)
+            messages.append(assistant_msg)
 
-                tc_req = ToolCallRequest(
-                    tool_name=tool_name,
-                    arguments=arguments,
-                    call_id=call_id,
-                )
-                iteration.tool_calls.append(tc_req)
+            # Execute tools (parallel or sequential)
+            tc_requests, observations = await self._execute_tool_calls(
+                llm_response.tool_calls,
+            )
+            step.tool_calls = tc_requests
+            step.observations = observations
 
-                try:
-                    tool = self.registry.get(tool_name)
-                except KeyError:
-                    observation = {"error": f"Unknown tool: {tool_name}"}
-                    tool = None
-
-                if tool is not None:
-                    try:
-                        observation = await tool.execute(**arguments)
-                    except Exception as exc:
-                        logger.exception("Tool %s raised an error", tool_name)
-                        observation = {"error": str(exc)}
-
-                iteration.observations.append(observation)
+            # Append tool results to messages
+            for tc, obs in zip(llm_response.tool_calls, observations):
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": call_id,
-                    "content": json.dumps(observation, ensure_ascii=False),
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(obs, ensure_ascii=False),
                 })
 
-            iterations.append(iteration)
+            steps.append(step)
+
+            if trace:
+                trace.record_stage("iteration", {
+                    "index": i,
+                    "thought": step.thought[:200],
+                    "tool_calls": [t.tool_name for t in tc_requests],
+                    "tokens": token_count,
+                })
 
         # Exhausted max iterations
+        if trace:
+            trace.record_stage("max_iterations", {"iterations": self.config.max_iterations})
+
         return AgentResult(
             answer="Reached maximum iterations. Returning partial results.",
-            iterations=iterations,
-            total_tokens=self.budget.used,
+            tool_calls_log=steps,
+            total_tokens=budget.used,
+            iterations=self.config.max_iterations,
             stopped_reason="max_iterations",
         )
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    async def _execute_tool_calls(
+        self,
+        tool_calls: list[ToolCall],
+    ) -> tuple[list[ToolCallRequest], list[dict[str, Any]]]:
+        """Execute tool calls, respecting parallel_tool_calls and tool_timeout."""
+        tc_requests: list[ToolCallRequest] = []
+        for tc in tool_calls:
+            tc_requests.append(ToolCallRequest(
+                tool_name=tc.name,
+                arguments=tc.arguments,
+                call_id=tc.id,
+            ))
+
+        if self.config.parallel_tool_calls and len(tool_calls) > 1:
+            observations = await self._execute_parallel(tool_calls)
+        else:
+            observations = await self._execute_sequential(tool_calls)
+
+        return tc_requests, observations
+
+    async def _execute_parallel(
+        self,
+        tool_calls: list[ToolCall],
+    ) -> list[dict[str, Any]]:
+        """Execute multiple tool calls concurrently with timeout."""
+        tasks = [
+            self._run_single_tool(tc.name, tc.arguments)
+            for tc in tool_calls
+        ]
+        return list(await asyncio.gather(*tasks))
+
+    async def _execute_sequential(
+        self,
+        tool_calls: list[ToolCall],
+    ) -> list[dict[str, Any]]:
+        """Execute tool calls one at a time."""
+        results: list[dict[str, Any]] = []
+        for tc in tool_calls:
+            result = await self._run_single_tool(tc.name, tc.arguments)
+            results.append(result)
+        return results
+
+    async def _run_single_tool(
+        self,
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run a single tool with timeout protection."""
+        try:
+            tool = self.registry.get(tool_name)
+        except KeyError:
+            return {"error": f"Unknown tool: {tool_name}"}
+
+        try:
+            result = await asyncio.wait_for(
+                tool.execute(**arguments),
+                timeout=self.config.tool_timeout,
+            )
+            return result
+        except asyncio.TimeoutError:
+            logger.warning("Tool %s timed out after %.1fs", tool_name, self.config.tool_timeout)
+            return {"error": f"Tool '{tool_name}' timed out after {self.config.tool_timeout}s"}
+        except Exception as exc:
+            logger.exception("Tool %s raised an error", tool_name)
+            return {"error": str(exc)}
+
+    @staticmethod
+    def _build_assistant_message(response: LLMResponse) -> dict[str, Any]:
+        """Build the assistant message dict for the conversation history."""
+        msg: dict[str, Any] = {"role": "assistant", "content": response.text or None}
+        if response.tool_calls:
+            msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": json.dumps(tc.arguments, ensure_ascii=False),
+                    },
+                }
+                for tc in response.tool_calls
+            ]
+        return msg
