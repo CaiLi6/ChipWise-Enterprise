@@ -135,7 +135,7 @@
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
 | 3B1 | Celery 基座 + 配置 + Worker 启动 | [x] | 2026-04-10 | |
-| 3B2 | Ingestion 单步 Tasks (download→dedup→extract→chunk→embed→store) | [ ] | | |
+| 3B2 | Ingestion 单步 Tasks (download→dedup→extract→chunk→embed→store) | [x] | 2026-04-10 | |
 | 3B3 | Graph Sync Task (PG→Kùzu 增量同步) | [ ] | | |
 | 3B4 | Task Chain 编排 + 优先级队列 | [ ] | | |
 | 3B5 | 任务进度 WebSocket 推送 | [ ] | | |
@@ -244,11 +244,11 @@
 |-------|---------|--------|------|
 | Phase 1 | 18 | 18 | 100% |
 | Phase 2 | 19 | 19 | 100% |
-| Phase 3 | 13 | 5 | 38% |
+| Phase 3 | 13 | 6 | 46% |
 | Phase 4 | 8 | 0 | 0% |
 | Phase 5 | 9 | 0 | 0% |
 | Phase 6 | 11 | 0 | 0% |
-| **总计** | **78** | **42** | **53%** |
+| **总计** | **78** | **43** | **55%** |
 
 ---
 

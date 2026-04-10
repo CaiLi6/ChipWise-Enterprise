@@ -11,7 +11,12 @@ from unittest.mock import MagicMock, patch
 from src.ingestion.tasks import (
     validate_and_dedup,
     extract_text,
+    extract_tables,
+    extract_structured_params,
     chunk_text,
+    embed_chunks,
+    store_vectors,
+    store_metadata,
     create_ingestion_chain,
 )
 
@@ -46,5 +51,35 @@ class TestIngestionTasks:
         assert len(result["chunks"]) >= 1
 
     def test_create_ingestion_chain(self) -> None:
-        chain = create_ingestion_chain("http://example.com/doc.pdf", "ST", user_id=1)
-        assert chain is not None
+        c = create_ingestion_chain("http://example.com/doc.pdf", "ST", user_id=1)
+        assert c is not None
+
+    def test_extract_text_skipped(self) -> None:
+        result = extract_text.__wrapped__({"skipped": True})
+        assert result["skipped"] is True
+        assert "text" not in result
+
+    def test_extract_tables_skipped(self) -> None:
+        result = extract_tables.__wrapped__({"skipped": True})
+        assert result["skipped"] is True
+
+    def test_extract_structured_params_skipped(self) -> None:
+        result = extract_structured_params.__wrapped__({"skipped": True})
+        assert result["skipped"] is True
+
+    def test_embed_chunks_skipped(self) -> None:
+        result = embed_chunks.__wrapped__({"skipped": True})
+        assert result["skipped"] is True
+
+    def test_store_vectors_skipped(self) -> None:
+        result = store_vectors.__wrapped__({"skipped": True})
+        assert result["skipped"] is True
+
+    def test_store_metadata_skipped(self) -> None:
+        result = store_metadata.__wrapped__({"skipped": True})
+        assert result["skipped"] is True
+
+    def test_store_vectors_counts_chunks(self) -> None:
+        doc_info = {"skipped": False, "chunks": [{"id": 1}, {"id": 2}]}
+        result = store_vectors.__wrapped__(doc_info)
+        assert result["vector_count"] == 2
