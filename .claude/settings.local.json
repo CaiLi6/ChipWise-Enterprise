@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -n 1,3802p C:/Users/mech-mind/Desktop/test/Enterprise-Rag-Agent/docs/ENTERPRISE_DEV_SPEC.md)",
+      "Bash(sed -n 6219,7081p C:/Users/mech-mind/Desktop/test/Enterprise-Rag-Agent/docs/ENTERPRISE_DEV_SPEC.md)",
+      "Bash(python _simplify.py)"
+    ]
+  }
+}
