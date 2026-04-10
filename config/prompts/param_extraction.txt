@@ -1,0 +1,22 @@
+Extract all chip parameters from the following table data.
+
+Return a JSON array. Each element must have these fields:
+- "name" (string, required): parameter name (e.g., "Maximum Clock Frequency")
+- "category" (string, required): one of "electrical", "timing", "thermal", "mechanical", "environmental"
+- "min_value" (string or null): minimum value
+- "typ_value" (string or null): typical value
+- "max_value" (string or null): maximum value
+- "unit" (string): measurement unit (e.g., "MHz", "V", "mA", "°C")
+- "condition" (string or null): test condition (e.g., "VDD = 3.3V, T = 25°C")
+
+Rules:
+1. Extract ALL parameters from the table — do not skip any rows.
+2. Normalize units to standard abbreviations.
+3. If a value is missing, use null (not empty string).
+4. Return ONLY the JSON array, no explanation.
+
+Chip: {chip_part_number}
+Table (page {page}):
+{table_text}
+
+JSON output:
