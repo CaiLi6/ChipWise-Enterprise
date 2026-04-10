@@ -157,7 +157,7 @@ main ─────────────────────────
 | 2C1 | BaseTool + ToolRegistry 自动发现 | [x] | 2026-04-10 | |
 | 2C2 | AgentOrchestrator ReAct 主循环 | [x] | 2026-04-10 | |
 | 2C3 | TokenBudget + SafetyGuardrails + Structured Output Validator | [x] | 2026-04-10 | |
-| 2C4 | rag_search Tool (Hybrid + Graph Boost) | [ ] | | |
+| 2C4 | rag_search Tool (Hybrid + Graph Boost) | [x] | 2026-04-10 | |
 | 2C5 | graph_query Tool (4 种图查询) | [ ] | | |
 | 2C6 | sql_query Tool (参数化 PG 查询) | [ ] | | |
 
@@ -293,12 +293,12 @@ main ─────────────────────────
 | Phase | 总任务数 | 已完成 | 进度 |
 |-------|---------|--------|------|
 | Phase 1 | 18 | 18 | 100% |
-| Phase 2 | 19 | 13 | 68% |
+| Phase 2 | 19 | 14 | 73% |
 | Phase 3 | 13 | 0 | 0% |
 | Phase 4 | 8 | 0 | 0% |
 | Phase 5 | 9 | 0 | 0% |
 | Phase 6 | 11 | 0 | 0% |
-| **总计** | **78** | **31** | **39%** |
+| **总计** | **78** | **32** | **41%** |
 
 ---
 
