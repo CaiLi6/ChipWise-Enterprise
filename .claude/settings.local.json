@@ -3,7 +3,13 @@
     "allow": [
       "Bash(sed -n 1,3802p C:/Users/mech-mind/Desktop/test/Enterprise-Rag-Agent/docs/ENTERPRISE_DEV_SPEC.md)",
       "Bash(sed -n 6219,7081p C:/Users/mech-mind/Desktop/test/Enterprise-Rag-Agent/docs/ENTERPRISE_DEV_SPEC.md)",
-      "Bash(python _simplify.py)"
+      "Bash(python _simplify.py)",
+      "Bash(python .claude/skills/qa-tester/scripts/qa_validate_notes.py)",
+      "Bash(python -m py_compile .claude/skills/qa-tester/scripts/qa_validate_notes.py)",
+      "Bash(python -m py_compile .claude/skills/qa-tester/scripts/qa_bootstrap.py)",
+      "Bash(python -m py_compile .claude/skills/qa-tester/scripts/qa_config.py)",
+      "Bash(python -m py_compile .claude/skills/qa-tester/scripts/qa_multistep.py)",
+      "Bash(wc -l .claude/skills/qa-tester/SKILL.md .claude/skills/qa-tester/QA_TEST_PLAN.md .claude/skills/qa-tester/QA_TEST_PROGRESS.md .claude/skills/qa-tester/references/*.md .claude/skills/qa-tester/scripts/*.py)"
     ]
   }
 }

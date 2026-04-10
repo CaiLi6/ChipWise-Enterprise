@@ -2,7 +2,7 @@
 """QA Bootstrap — Set up / tear down system states for ChipWise Enterprise QA testing.
 
 Usage:
-    python .claude/skills/qa-tester/scripts/qa_bootstrap.py [command]
+    python .github/skills/qa-tester/scripts/qa_bootstrap.py [command]
 
 Commands:
     infra      Verify Docker containers healthy (PG, Milvus, Redis), run schema init

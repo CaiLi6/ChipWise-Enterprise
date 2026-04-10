@@ -2,10 +2,10 @@
 """QA Config — Switch settings.yaml profiles for testing ChipWise Enterprise configurations.
 
 Usage:
-    python .claude/skills/qa-tester/scripts/qa_config.py show          # List profiles
-    python .claude/skills/qa-tester/scripts/qa_config.py check         # Verify current config
-    python .claude/skills/qa-tester/scripts/qa_config.py apply <name>  # Apply a profile
-    python .claude/skills/qa-tester/scripts/qa_config.py restore       # Restore backup
+    python .github/skills/qa-tester/scripts/qa_config.py show          # List profiles
+    python .github/skills/qa-tester/scripts/qa_config.py check         # Verify current config
+    python .github/skills/qa-tester/scripts/qa_config.py apply <name>  # Apply a profile
+    python .github/skills/qa-tester/scripts/qa_config.py restore       # Restore backup
 
 Profiles:
     default            Restore standard LM Studio config (primary + router)

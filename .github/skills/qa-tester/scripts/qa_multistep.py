@@ -8,7 +8,7 @@ Each function prints step-by-step results with ACTUAL values so the AI
 cannot infer or skip steps.
 
 Usage:
-    python .claude/skills/qa-tester/scripts/qa_multistep.py <test_id>
+    python .github/skills/qa-tester/scripts/qa_multistep.py <test_id>
 
 Supported test IDs:
     K-01   Full lifecycle: upload→query→delete→query

@@ -8,7 +8,7 @@ Sources:
     docs/DEVELOPMENT_PLAN.md     → references/06-schedule.md (with §6 overview header)
 
 Usage:
-    python .github/skills/auto-coder/scripts/sync_spec.py [--force]
+    python .claude/skills/auto-coder/scripts/sync_spec.py [--force]
 """
 
 import hashlib
@@ -63,7 +63,7 @@ def _find_repo_root(skill_dir: Path) -> Path:
         candidate = candidate.parent
         if all((candidate / p).exists() for p in REQUIRED_DOCS):
             return candidate
-    # Fallback: legacy 3-level parent (auto-coder → skills → .github → root)
+    # Fallback: legacy 3-level parent (auto-coder → skills → .claude → root)
     legacy = skill_dir.parent.parent.parent
     if all((legacy / p).exists() for p in REQUIRED_DOCS):
         return legacy

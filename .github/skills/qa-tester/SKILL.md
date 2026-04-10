@@ -14,7 +14,7 @@ Optional modifiers: append section letter (`run QA B`) or test ID (`run QA B-01`
 > ## ⛔ IRON RULES
 >
 > ### Rule 1: STRICTLY SERIAL
-> Pick ONE test → Run ONE command → Wait for output → Record ONE row in `.claude/skills/qa-tester/QA_TEST_PROGRESS.md` → THEN pick next.
+> Pick ONE test → Run ONE command → Wait for output → Record ONE row in `.github/skills/qa-tester/QA_TEST_PROGRESS.md` → THEN pick next.
 > NEVER run two tests in one command. NEVER record two rows in one file edit. NEVER use parallel tool calls. NEVER plan the next test before recording the current one.
 >
 > ### Rule 2: PASS = TERMINAL OUTPUT EVIDENCE
@@ -36,7 +36,7 @@ Optional modifiers: append section letter (`run QA B`) or test ID (`run QA B-01`
 > Find bugs, not confirmations. 10+ passes with zero bugs → re-examine your rigor.
 >
 > ### Rule 6: SECTION-END VALIDATION
-> After completing a section, run `python .claude/skills/qa-tester/scripts/qa_validate_notes.py`.
+> After completing a section, run `python .github/skills/qa-tester/scripts/qa_validate_notes.py`.
 > Re-execute any flagged test before moving to next section.
 
 ---
@@ -49,7 +49,7 @@ Optional modifiers: append section letter (`run QA B`) or test ID (`run QA B-01`
 3. Run ONE command — WAIT for output
 4. Verify ALL assertions from Expected Result vs ACTUAL output
 5. Fix if needed (≤3 rounds)
-6. ⛔ GATE: Edit .claude/skills/qa-tester/QA_TEST_PROGRESS.md (row + counters) — ONE row per edit
+6. ⛔ GATE: Edit .github/skills/qa-tester/QA_TEST_PROGRESS.md (row + counters) — ONE row per edit
 7. Only NOW return to step 1
 ```
 
@@ -60,8 +60,8 @@ Optional modifiers: append section letter (`run QA B`) or test ID (`run QA B-01`
 
 ## Step 1: Pick Target
 
-1. Read `.claude/skills/qa-tester/QA_TEST_PLAN.md` for test steps and expected results.
-2. Read `.claude/skills/qa-tester/QA_TEST_PROGRESS.md` for current status and phase.
+1. Read `.github/skills/qa-tester/QA_TEST_PLAN.md` for test steps and expected results.
+2. Read `.github/skills/qa-tester/QA_TEST_PROGRESS.md` for current status and phase.
 3. User-specified section/ID → scope to that. Otherwise → first ⬜ pending test.
 4. If any 🔧 tests exist, re-test those first.
 5. Execute in section order (A→L), within section in ID order.
@@ -92,16 +92,16 @@ See [references/phase_test_map.md](references/phase_test_map.md) for which secti
 
 | State | Command |
 |-------|---------|
-| InfraUp | `python .claude/skills/qa-tester/scripts/qa_bootstrap.py infra` |
-| ModelsUp | `python .claude/skills/qa-tester/scripts/qa_bootstrap.py models` |
-| Baseline | `python .claude/skills/qa-tester/scripts/qa_bootstrap.py baseline` |
-| Empty | `python .claude/skills/qa-tester/scripts/qa_bootstrap.py clear` |
-| InvalidLLM | `python .claude/skills/qa-tester/scripts/qa_config.py apply invalid_llm` |
-| InvalidEmbed | `python .claude/skills/qa-tester/scripts/qa_config.py apply invalid_embed` |
+| InfraUp | `python .github/skills/qa-tester/scripts/qa_bootstrap.py infra` |
+| ModelsUp | `python .github/skills/qa-tester/scripts/qa_bootstrap.py models` |
+| Baseline | `python .github/skills/qa-tester/scripts/qa_bootstrap.py baseline` |
+| Empty | `python .github/skills/qa-tester/scripts/qa_bootstrap.py clear` |
+| InvalidLLM | `python .github/skills/qa-tester/scripts/qa_config.py apply invalid_llm` |
+| InvalidEmbed | `python .github/skills/qa-tester/scripts/qa_config.py apply invalid_embed` |
 | Any | no state change needed |
 
-After config-profile tests → `python .claude/skills/qa-tester/scripts/qa_config.py restore`
-Check state → `python .claude/skills/qa-tester/scripts/qa_bootstrap.py status`
+After config-profile tests → `python .github/skills/qa-tester/scripts/qa_config.py restore`
+Check state → `python .github/skills/qa-tester/scripts/qa_bootstrap.py status`
 
 ---
 
@@ -143,17 +143,17 @@ HTTP requests to Gradio :7860. Check page loads, API endpoints respond, SSE stre
 
 Tests with 3+ sequential steps **MUST** use the runner script:
 ```
-python .claude/skills/qa-tester/scripts/qa_multistep.py <TEST_ID>
+python .github/skills/qa-tester/scripts/qa_multistep.py <TEST_ID>
 ```
 
 The script executes every sub-step, prints ACTUAL values at each step, outputs `VERDICT: PASS/FAIL`. Copy the VERDICT and key step values into the Note.
 
 ### Config & Fault Tests (J)
 
-1. Apply profile: `python .claude/skills/qa-tester/scripts/qa_config.py apply <profile>`
+1. Apply profile: `python .github/skills/qa-tester/scripts/qa_config.py apply <profile>`
 2. Run command from test plan.
 3. Verify error handling / graceful degradation.
-4. Restore: `python .claude/skills/qa-tester/scripts/qa_config.py restore`
+4. Restore: `python .github/skills/qa-tester/scripts/qa_config.py restore`
 
 ---
 
@@ -171,7 +171,7 @@ The script executes every sub-step, prints ACTUAL values at each step, outputs `
 
 **⛔ GATE — do this BEFORE picking the next test.**
 
-Edit `.claude/skills/qa-tester/QA_TEST_PROGRESS.md`: update ONE test row + summary counters. ONE row per file edit.
+Edit `.github/skills/qa-tester/QA_TEST_PROGRESS.md`: update ONE test row + summary counters. ONE row per file edit.
 
 ### ✅ PASS Requirements
 
@@ -213,7 +213,7 @@ Update in the same edit: `✅ Pass: X | ❌ Fail: Y | ⏭️ Skip: Z | 🔧 Fix:
 
 After each completed section:
 ```
-python .claude/skills/qa-tester/scripts/qa_validate_notes.py
+python .github/skills/qa-tester/scripts/qa_validate_notes.py
 ```
 Re-execute any flagged test. Do NOT proceed until 0 flags.
 
@@ -223,8 +223,8 @@ Re-execute any flagged test. Do NOT proceed until 0 flags.
 
 | File | Purpose |
 |------|---------|
-| `.claude/skills/qa-tester/QA_TEST_PLAN.md` | Test steps and expected results |
-| `.claude/skills/qa-tester/QA_TEST_PROGRESS.md` | Execution status and notes |
+| `.github/skills/qa-tester/QA_TEST_PLAN.md` | Test steps and expected results |
+| `.github/skills/qa-tester/QA_TEST_PROGRESS.md` | Execution status and notes |
 | `config/settings.yaml` | System configuration |
 | `src/api/main.py` | FastAPI application entry point |
 | `src/agent/orchestrator.py` | Agent ReAct loop |
