@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import AsyncMock
 
 from src.core.query_rewriter import QueryRewriter
+from src.libs.llm.base import LLMResponse
 
 
 @pytest.mark.unit
@@ -13,7 +14,7 @@ class TestQueryRewriter:
     @pytest.fixture
     def llm(self) -> AsyncMock:
         llm = AsyncMock()
-        llm.generate.return_value = "STM32F407 的主频是多少"
+        llm.generate.return_value = LLMResponse(text="STM32F407 的主频是多少")
         return llm
 
     @pytest.fixture
@@ -42,7 +43,7 @@ class TestQueryRewriter:
 
     @pytest.mark.asyncio
     async def test_english_pronoun(self, rewriter: QueryRewriter, llm: AsyncMock) -> None:
-        llm.generate.return_value = "What is the clock speed of STM32F407"
+        llm.generate.return_value = LLMResponse(text="What is the clock speed of STM32F407")
         history = [{"role": "user", "content": "STM32F407"}]
         result = await rewriter.rewrite("What is its clock speed", history)
         assert "STM32F407" in result
@@ -62,7 +63,7 @@ class TestQueryRewriter:
 
     @pytest.mark.asyncio
     async def test_empty_llm_response_returns_original(self, rewriter: QueryRewriter, llm: AsyncMock) -> None:
-        llm.generate.return_value = ""
+        llm.generate.return_value = LLMResponse(text="")
         history = [{"role": "user", "content": "STM32F407"}]
         result = await rewriter.rewrite("它的价格", history)
         assert result == "它的价格"

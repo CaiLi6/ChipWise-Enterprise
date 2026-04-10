@@ -70,10 +70,10 @@ class QueryRewriter:
         prompt = self._prompt_template.format(history=hist_text, query=current_query)
 
         try:
-            rewritten = await self._llm.generate(
+            response = await self._llm.generate(
                 prompt, temperature=0.0, max_tokens=100
             )
-            rewritten = rewritten.strip()
+            rewritten = response.text.strip() if hasattr(response, "text") else str(response).strip()
             if rewritten:
                 return rewritten
         except Exception:
