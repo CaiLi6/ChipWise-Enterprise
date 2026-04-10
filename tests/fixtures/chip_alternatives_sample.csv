@@ -1,0 +1,6 @@
+original_part,alternative_part,compat_type,compat_score,is_domestic,key_differences
+STM32F407VGT6,GD32F407VGT6,pin_compatible,0.92,true,"Lower power; clock max 200MHz vs 168MHz"
+STM32F103C8T6,GD32F103C8T6,pin_compatible,0.95,true,"Compatible pinout; slightly faster clock"
+STM32F407VGT6,AT32F407VGT7,pin_compatible,0.88,true,"Artery Tech; 240MHz max; different flash wait states"
+STM32F103C8T6,CH32F103C8T6,pin_compatible,0.85,true,"WCH; lower cost; limited peripheral differences"
+TPS65217CRSLR,TPS65218CRSLR,functional_equivalent,0.75,false,"Updated version; different I2C address"

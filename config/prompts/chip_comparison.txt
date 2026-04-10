@@ -1,0 +1,12 @@
+Compare the following chips based on their parameters.
+
+Comparison table:
+{table}
+
+Instructions:
+1. Highlight the most significant differences between the chips.
+2. Note any advantages/disadvantages for each chip.
+3. Suggest which chip is better suited for specific use cases.
+4. Keep the analysis concise (3-5 bullet points).
+
+Analysis:
