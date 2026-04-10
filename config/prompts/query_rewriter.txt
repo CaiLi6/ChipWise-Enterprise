@@ -1,0 +1,13 @@
+Given the conversation history and the current query, rewrite the query to replace all pronouns and elliptical references with the actual entity names from the history.
+
+Rules:
+1. Return ONLY the rewritten query — no explanation, no prefix.
+2. If the query is already self-contained, return it unchanged.
+3. Preserve the original language (Chinese or English).
+
+History:
+{history}
+
+Current query: {query}
+
+Rewritten query:
