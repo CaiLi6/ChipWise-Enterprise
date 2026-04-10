@@ -87,7 +87,7 @@
 | 2A1 | MilvusStore (BaseVectorStore 实现) | [x] | 2026-04-10 | |
 | 2A2 | BGE-M3 Client (BaseEmbedding 实现) | [x] | 2026-04-10 | |
 | 2A3 | bce-reranker Client (BaseReranker 实现) | [x] | 2026-04-10 | |
-| 2A4 | LMStudio LLM Client (BaseLLM 实现) | [ ] | | |
+| 2A4 | LMStudio LLM Client (BaseLLM 实现) | [x] | 2026-04-10 | |
 | 2A5 | BaseGraphStore + KuzuGraphStore + GraphStoreFactory | [ ] | | |
 | 2A6 | Kùzu Schema 初始化脚本 | [ ] | | |
 
@@ -243,12 +243,12 @@
 | Phase | 总任务数 | 已完成 | 进度 |
 |-------|---------|--------|------|
 | Phase 1 | 18 | 18 | 100% |
-| Phase 2 | 19 | 3 | 16% |
+| Phase 2 | 19 | 4 | 21% |
 | Phase 3 | 13 | 0 | 0% |
 | Phase 4 | 8 | 0 | 0% |
 | Phase 5 | 9 | 0 | 0% |
 | Phase 6 | 11 | 0 | 0% |
-| **总计** | **78** | **21** | **27%** |
+| **总计** | **78** | **22** | **28%** |
 
 ---
 
