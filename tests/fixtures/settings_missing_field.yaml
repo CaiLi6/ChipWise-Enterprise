@@ -1,0 +1,19 @@
+# Missing llm.primary.model — should fail validation
+llm:
+  primary:
+    provider: openai_compatible
+    base_url: "http://localhost:1234/v1"
+    model: ""
+    api_key: "lm-studio"
+
+embedding:
+  base_url: "http://localhost:8001"
+
+vector_store:
+  backend: milvus
+
+database:
+  host: "localhost"
+
+redis:
+  host: "localhost"

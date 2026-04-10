@@ -1,0 +1,87 @@
+llm:
+  primary:
+    provider: openai_compatible
+    base_url: "http://localhost:1234/v1"
+    model: "qwen3-35b-q5_k_m"
+    api_key: "lm-studio"
+    max_tokens: 4096
+    temperature: 0.1
+    timeout: 90
+    max_concurrent: 2
+  router:
+    provider: openai_compatible
+    base_url: "http://localhost:1234/v1"
+    model: "qwen3-1.7b-q5_k_m"
+    api_key: "lm-studio"
+    max_tokens: 256
+    temperature: 0.0
+    timeout: 15
+    max_concurrent: 10
+
+embedding:
+  provider: fastapi_remote
+  base_url: "http://localhost:8001"
+  model: "BAAI/bge-m3"
+  dim: 1024
+  batch_size: 32
+  timeout: 30
+
+rerank:
+  provider: fastapi_remote
+  base_url: "http://localhost:8002"
+  model: "maidalun1020/bce-reranker-base_v1"
+  top_k: 10
+  timeout: 10
+  enabled: true
+
+vector_store:
+  backend: milvus
+  milvus:
+    host: "localhost"
+    port: 19530
+    collection_name: "datasheet_chunks"
+    consistency_level: "Session"
+
+database:
+  host: "localhost"
+  port: 5432
+  database: "chipwise"
+  user: "chipwise"
+  password: "testpass"
+  pool_size: 10
+  max_overflow: 5
+
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  celery_db: 1
+  password: ""
+
+agent:
+  max_iterations: 5
+  max_total_tokens: 8192
+  parallel_tool_calls: true
+  temperature: 0.1
+  tool_timeout: 30.0
+
+graph_store:
+  backend: kuzu
+  kuzu:
+    db_path: "data/kuzu"
+
+auth:
+  mode: sso
+  sso:
+    provider: keycloak
+    issuer: "https://keycloak.company.com/realms/chipwise"
+    client_id: "chipwise-enterprise"
+    client_secret: "test-secret"
+  jwt:
+    algorithm: "RS256"
+  local_fallback:
+    enabled: true
+    jwt_secret: "test-jwt-secret"
+
+observability:
+  log_level: "DEBUG"

@@ -9,7 +9,11 @@
       "Bash(python -m py_compile .claude/skills/qa-tester/scripts/qa_bootstrap.py)",
       "Bash(python -m py_compile .claude/skills/qa-tester/scripts/qa_config.py)",
       "Bash(python -m py_compile .claude/skills/qa-tester/scripts/qa_multistep.py)",
-      "Bash(wc -l .claude/skills/qa-tester/SKILL.md .claude/skills/qa-tester/QA_TEST_PLAN.md .claude/skills/qa-tester/QA_TEST_PROGRESS.md .claude/skills/qa-tester/references/*.md .claude/skills/qa-tester/scripts/*.py)"
+      "Bash(wc -l .claude/skills/qa-tester/SKILL.md .claude/skills/qa-tester/QA_TEST_PLAN.md .claude/skills/qa-tester/QA_TEST_PROGRESS.md .claude/skills/qa-tester/references/*.md .claude/skills/qa-tester/scripts/*.py)",
+      "Bash(python3:*)",
+      "Bash(pip install:*)",
+      "Bash(apt list:*)",
+      "Bash(sudo apt-get:*)"
     ]
   }
 }

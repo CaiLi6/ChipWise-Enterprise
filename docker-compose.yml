@@ -1,0 +1,60 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: chipwise-postgres
+    ports: ["5432:5432"]
+    environment:
+      POSTGRES_DB: chipwise
+      POSTGRES_USER: chipwise
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 4G }
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chipwise"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  milvus:
+    image: milvusdb/milvus:v2.4-latest
+    container_name: chipwise-milvus
+    ports: ["19530:19530", "9091:9091"]
+    environment:
+      ETCD_USE_EMBED: "true"
+      COMMON_STORAGETYPE: local
+    volumes:
+      - milvus_data:/var/lib/milvus
+    deploy:
+      resources:
+        limits: { cpus: "3.0", memory: 16G }
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: chipwise-redis
+    ports: ["6379:6379"]
+    command: redis-server --maxmemory 3gb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 3G }
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+  milvus_data:
+  redis_data:

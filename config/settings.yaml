@@ -1,0 +1,175 @@
+# ============================================================
+# ChipWise Enterprise Configuration
+# ============================================================
+
+# --- LLM (LM Studio multi-model) ---
+llm:
+  primary:
+    provider: openai_compatible
+    base_url: "http://localhost:1234/v1"
+    model: "qwen3-35b-q5_k_m"
+    api_key: "lm-studio"
+    max_tokens: 4096
+    temperature: 0.1
+    timeout: 90
+    max_concurrent: 2
+  router:
+    provider: openai_compatible
+    base_url: "http://localhost:1234/v1"
+    model: "qwen3-1.7b-q5_k_m"
+    api_key: "lm-studio"
+    max_tokens: 256
+    temperature: 0.0
+    timeout: 15
+    max_concurrent: 10
+
+# --- Embedding (BGE-M3 FastAPI microservice) ---
+embedding:
+  provider: fastapi_remote
+  base_url: "http://localhost:8001"
+  model: "BAAI/bge-m3"
+  dim: 1024
+  batch_size: 32
+  timeout: 30
+
+# --- Reranker (bce-reranker FastAPI microservice) ---
+rerank:
+  provider: fastapi_remote
+  base_url: "http://localhost:8002"
+  model: "maidalun1020/bce-reranker-base_v1"
+  top_k: 10
+  timeout: 10
+  enabled: true
+
+# --- Vector Store ---
+vector_store:
+  backend: milvus
+  milvus:
+    host: "localhost"
+    port: 19530
+    collection_name: "datasheet_chunks"
+    consistency_level: "Session"
+
+# --- PostgreSQL ---
+database:
+  host: "localhost"
+  port: 5432
+  database: "chipwise"
+  user: "chipwise"
+  password: "${PG_PASSWORD}"
+  pool_size: 10
+  max_overflow: 5
+
+# --- Redis ---
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  celery_db: 1
+  password: "${REDIS_PASSWORD}"
+
+# --- Retrieval ---
+retrieval:
+  mode: hybrid
+  top_k_search: 30
+  top_k_rerank: 10
+  rrf_k: 60
+
+# --- Semantic Cache ---
+cache:
+  enabled: true
+  similarity_threshold: 0.95
+  ttl_conversational: 3600
+  ttl_comparison: 14400
+
+# --- Rate Limiting ---
+rate_limit:
+  per_user_per_minute: 30
+  per_user_per_hour: 500
+  global_primary_llm_concurrent: 2
+  global_router_llm_concurrent: 10
+
+# --- Agent Orchestrator ---
+agent:
+  max_iterations: 5
+  max_total_tokens: 8192
+  parallel_tool_calls: true
+  temperature: 0.1
+  tool_timeout: 30.0
+
+# --- Graph Store ---
+graph_store:
+  backend: kuzu
+  kuzu:
+    db_path: "data/kuzu"
+
+# --- Ingestion ---
+ingestion:
+  pdf_extractor:
+    tier1: pdfplumber
+    tier2: camelot
+    tier3: paddleocr
+  chunking:
+    chunk_size: 1000
+    chunk_overlap: 200
+    separator: ["\n\n", "\n", ". ", " "]
+  crawler:
+    schedule: "0 2 * * *"
+    max_per_run: 50
+  watchdog:
+    paths: ["//fileserver/datasheets/"]
+    debounce_seconds: 5
+    file_types: [".pdf"]
+
+# --- Auth (SSO/OIDC) ---
+auth:
+  mode: sso
+  sso:
+    provider: keycloak
+    issuer: "https://keycloak.company.com/realms/chipwise"
+    client_id: "chipwise-enterprise"
+    client_secret: "${SSO_CLIENT_SECRET}"
+    redirect_uri: "https://chipwise.company.com/api/v1/auth/sso/callback"
+    scopes: ["openid", "profile", "email", "groups"]
+    group_role_mapping:
+      "chipwise-admin": "admin"
+      "chipwise-engineers": "user"
+      "chipwise-viewers": "viewer"
+      "default": "viewer"
+  jwt:
+    algorithm: "RS256"
+    private_key_path: "/run/secrets/jwt-private.pem"
+    public_key_path: "/run/secrets/jwt-public.pem"
+    access_token_expire_minutes: 30
+    refresh_token_expire_days: 7
+  local_fallback:
+    enabled: true
+    jwt_secret: "${JWT_SECRET_KEY}"
+
+# --- Resilience ---
+resilience:
+  circuit_breaker:
+    failure_threshold: 5
+    recovery_timeout: 30
+    success_threshold: 2
+  tenacity:
+    llm:       { max_attempts: 3, min_wait: 2, max_wait: 15 }
+    embedding: { max_attempts: 4, min_wait: 0.5, max_wait: 10 }
+    reranker:  { max_attempts: 4, min_wait: 0.5, max_wait: 10 }
+    milvus:    { max_attempts: 5, min_wait: 1, max_wait: 30 }
+    postgres:  { max_attempts: 4, min_wait: 0.5, max_wait: 5 }
+    redis:     { max_attempts: 4, min_wait: 0.2, max_wait: 2 }
+    crawler:   { max_attempts: 6, min_wait: 2, max_wait: 60 }
+
+# --- Observability ---
+observability:
+  trace_log_file: "./logs/traces.jsonl"
+  app_log_file: "./logs/app.log"
+  log_level: "INFO"
+  celery_log_file: "./logs/celery.log"
+
+# --- Frontend ---
+frontend:
+  type: gradio
+  port: 7860
+  share: false

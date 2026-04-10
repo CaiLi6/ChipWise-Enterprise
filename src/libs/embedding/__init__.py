@@ -1,0 +1,1 @@
+"""Embedding abstraction layer."""
