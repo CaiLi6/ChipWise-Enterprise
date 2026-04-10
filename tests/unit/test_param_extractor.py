@@ -7,6 +7,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from src.ingestion.param_extractor import ParamExtractor
+from src.libs.llm.base import LLMResponse
 
 
 @pytest.mark.unit
@@ -14,7 +15,7 @@ class TestParamExtractor:
     @pytest.fixture
     def llm(self) -> AsyncMock:
         llm = AsyncMock()
-        llm.generate.return_value = json.dumps([
+        llm.generate.return_value = LLMResponse(text=json.dumps([
             {
                 "name": "Maximum Clock Frequency",
                 "category": "timing",
@@ -24,7 +25,7 @@ class TestParamExtractor:
                 "unit": "MHz",
                 "condition": "VDD = 3.3V",
             }
-        ])
+        ]))
         return llm
 
     @pytest.fixture
@@ -68,7 +69,7 @@ class TestParamExtractor:
         llm = AsyncMock()
         llm.generate.side_effect = [
             Exception("timeout"),
-            json.dumps([{"name": "X", "category": "electrical", "unit": "V"}]),
+            LLMResponse(text=json.dumps([{"name": "X", "category": "electrical", "unit": "V"}])),
         ]
         extractor = ParamExtractor(llm)
         result = await extractor.extract_from_table([["A"]], "CHIP", 1)
@@ -85,9 +86,9 @@ class TestParamExtractor:
     @pytest.mark.asyncio
     async def test_with_validator(self) -> None:
         llm = AsyncMock()
-        llm.generate.return_value = json.dumps([
+        llm.generate.return_value = LLMResponse(text=json.dumps([
             {"name": "Freq", "category": "timing", "unit": "MHz", "typ_value": "168"}
-        ])
+        ]))
         validator = MagicMock()
         validator.validate_chip_param.return_value = {"valid": True, "warnings": []}
         extractor = ParamExtractor(llm, validator=validator)
@@ -98,9 +99,9 @@ class TestParamExtractor:
     @pytest.mark.asyncio
     async def test_validator_with_warnings(self) -> None:
         llm = AsyncMock()
-        llm.generate.return_value = json.dumps([
+        llm.generate.return_value = LLMResponse(text=json.dumps([
             {"name": "Freq", "category": "timing", "unit": "MHz", "typ_value": "-50"}
-        ])
+        ]))
         validator = MagicMock()
         validator.validate_chip_param.return_value = {
             "valid": True, "warnings": ["Negative frequency"]

@@ -62,9 +62,10 @@ class ParamExtractor:
         )
 
         try:
-            raw_output = await self._llm.generate(
+            response = await self._llm.generate(
                 prompt, temperature=0.0, max_tokens=2000
             )
+            raw_output = response.text if hasattr(response, "text") else str(response)
             params = self._parse_llm_output(raw_output)
 
             # Validate with StructuredOutputValidator if available
@@ -87,9 +88,10 @@ class ParamExtractor:
             logger.exception("LLM parameter extraction failed")
             # Retry once
             try:
-                raw_output = await self._llm.generate(
+                response = await self._llm.generate(
                     prompt, temperature=0.0, max_tokens=2000
                 )
+                raw_output = response.text if hasattr(response, "text") else str(response)
                 return self._parse_llm_output(raw_output)
             except Exception:
                 logger.exception("LLM param extraction retry also failed")
