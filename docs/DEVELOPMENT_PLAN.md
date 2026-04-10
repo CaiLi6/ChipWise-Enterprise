@@ -67,7 +67,7 @@
 | 1D1 | FastAPI App 骨架 + Health/Readiness 端点 | [x] | 2026-04-10 | |
 | 1D2 | DI 容器 (dependencies.py) | [x] | 2026-04-10 | |
 | 1D3 | JWT Auth 中间件 (RS256) | [x] | 2026-04-10 | |
-| 1D4 | Rate Limiter 中间件 (Redis Token Bucket) | [ ] | | |
+| 1D4 | Rate Limiter 中间件 (Redis Token Bucket) | [x] | 2026-04-10 | |
 | 1D5 | Request Logger 中间件 | [ ] | | |
 
 ##### 子阶段 1E：Kùzu 图谱 + Agent 骨架
@@ -242,13 +242,13 @@
 
 | Phase | 总任务数 | 已完成 | 进度 |
 |-------|---------|--------|------|
-| Phase 1 | 18 | 13 | 72% |
+| Phase 1 | 18 | 14 | 78% |
 | Phase 2 | 19 | 0 | 0% |
 | Phase 3 | 13 | 0 | 0% |
 | Phase 4 | 8 | 0 | 0% |
 | Phase 5 | 9 | 0 | 0% |
 | Phase 6 | 11 | 0 | 0% |
-| **总计** | **78** | **13** | **17%** |
+| **总计** | **78** | **14** | **18%** |
 
 ---
 
