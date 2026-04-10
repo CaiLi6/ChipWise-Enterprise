@@ -139,7 +139,7 @@ main ─────────────────────────
 | 2A3 | bce-reranker Client (BaseReranker 实现) | [x] | 2026-04-10 | |
 | 2A4 | LMStudio LLM Client (BaseLLM 实现) | [x] | 2026-04-10 | |
 | 2A5 | BaseGraphStore + KuzuGraphStore + GraphStoreFactory | [x] | 2026-04-10 | |
-| 2A6 | Kùzu Schema 初始化脚本 | [ ] | | |
+| 2A6 | Kùzu Schema 初始化脚本 | [x] | 2026-04-10 | |
 
 ##### 子阶段 2B：Retrieval 检索层
 
@@ -293,12 +293,12 @@ main ─────────────────────────
 | Phase | 总任务数 | 已完成 | 进度 |
 |-------|---------|--------|------|
 | Phase 1 | 18 | 18 | 100% |
-| Phase 2 | 19 | 5 | 26% |
+| Phase 2 | 19 | 6 | 32% |
 | Phase 3 | 13 | 0 | 0% |
 | Phase 4 | 8 | 0 | 0% |
 | Phase 5 | 9 | 0 | 0% |
 | Phase 6 | 11 | 0 | 0% |
-| **总计** | **78** | **23** | **29%** |
+| **总计** | **78** | **24** | **31%** |
 
 ---
 
