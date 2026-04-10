@@ -104,7 +104,7 @@
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 2C1 | BaseTool + ToolRegistry 自动发现 | [ ] | | |
+| 2C1 | BaseTool + ToolRegistry 自动发现 | [x] | 2026-04-10 | |
 | 2C2 | AgentOrchestrator ReAct 主循环 | [ ] | | |
 | 2C3 | TokenBudget + SafetyGuardrails + Structured Output Validator | [ ] | | |
 | 2C4 | rag_search Tool (Hybrid + Graph Boost) | [ ] | | |
@@ -243,12 +243,12 @@
 | Phase | 总任务数 | 已完成 | 进度 |
 |-------|---------|--------|------|
 | Phase 1 | 18 | 18 | 100% |
-| Phase 2 | 19 | 19 | 100% |
-| Phase 3 | 13 | 13 | 100% |
-| Phase 4 | 8 | 8 | 100% |
+| Phase 2 | 19 | 11 | 57% |
+| Phase 3 | 13 | 0 | 0% |
+| Phase 4 | 8 | 0 | 0% |
 | Phase 5 | 9 | 0 | 0% |
 | Phase 6 | 11 | 0 | 0% |
-| **总计** | **78** | **58** | **74%** |
+| **总计** | **78** | **29** | **37%** |
 
 ---
 

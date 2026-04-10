@@ -137,10 +137,13 @@ class AgentOrchestrator:
                 )
                 iteration.tool_calls.append(tc_req)
 
-                tool = self.registry.get_tool(tool_name)
-                if tool is None:
+                try:
+                    tool = self.registry.get(tool_name)
+                except KeyError:
                     observation = {"error": f"Unknown tool: {tool_name}"}
-                else:
+                    tool = None
+
+                if tool is not None:
                     try:
                         observation = await tool.execute(**arguments)
                     except Exception as exc:
