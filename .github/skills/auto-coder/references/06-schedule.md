@@ -145,10 +145,10 @@ main ─────────────────────────
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 2B1 | Milvus 原生 Hybrid Search (Dense+Sparse+RRF) | [ ] | | |
-| 2B2 | Graph Search (Kùzu Cypher 查询封装) | [ ] | | |
-| 2B3 | Reranker 编排 (bce-reranker 远程调用 + Fallback) | [ ] | | |
-| 2B4 | 多路结果融合 (fusion.py) | [ ] | | |
+| 2B1 | Milvus 原生 Hybrid Search (Dense+Sparse+RRF) | [x] | 2026-04-10 | |
+| 2B2 | Graph Search (Kùzu Cypher 查询封装) | [x] | 2026-04-10 | |
+| 2B3 | Reranker 编排 (bce-reranker 远程调用 + Fallback) | [x] | 2026-04-10 | |
+| 2B4 | 多路结果融合 (fusion.py) | [x] | 2026-04-10 | |
 
 ##### 子阶段 2C：Agent 框架
 
@@ -293,12 +293,12 @@ main ─────────────────────────
 | Phase | 总任务数 | 已完成 | 进度 |
 |-------|---------|--------|------|
 | Phase 1 | 18 | 18 | 100% |
-| Phase 2 | 19 | 6 | 32% |
+| Phase 2 | 19 | 10 | 53% |
 | Phase 3 | 13 | 0 | 0% |
 | Phase 4 | 8 | 0 | 0% |
 | Phase 5 | 9 | 0 | 0% |
 | Phase 6 | 11 | 0 | 0% |
-| **总计** | **78** | **24** | **31%** |
+| **总计** | **78** | **28** | **36%** |
 
 ---
 
