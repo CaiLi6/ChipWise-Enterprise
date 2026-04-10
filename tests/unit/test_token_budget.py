@@ -1,10 +1,10 @@
-"""Unit tests for TokenBudget."""
+"""Unit tests for TokenBudget (task 2C3)."""
 
 from __future__ import annotations
 
 import pytest
 
-from src.agent.safety.token_budget import TokenBudget
+from src.agent.safety.token_budget import TokenBudget, TokenBudgetExhausted
 
 
 @pytest.mark.unit
@@ -47,3 +47,26 @@ class TestTokenBudget:
         tb.consume(300)
         assert tb.used == 600
         assert tb.remaining == 400
+
+    def test_check_and_raise_not_exhausted(self) -> None:
+        """check_and_raise does nothing when budget remains."""
+        tb = TokenBudget(8192)
+        tb.consume(100)
+        tb.check_and_raise()  # should not raise
+
+    def test_check_and_raise_exhausted(self) -> None:
+        """check_and_raise raises TokenBudgetExhausted when over budget."""
+        tb = TokenBudget(100)
+        tb.consume(100)
+        with pytest.raises(TokenBudgetExhausted, match="exhausted"):
+            tb.check_and_raise()
+
+    def test_check_and_raise_over_budget(self) -> None:
+        tb = TokenBudget(100)
+        tb.consume(200)
+        with pytest.raises(TokenBudgetExhausted):
+            tb.check_and_raise()
+
+    def test_default_max_tokens(self) -> None:
+        tb = TokenBudget()
+        assert tb.remaining == 8192

@@ -1,6 +1,10 @@
-"""Token budget controller for Agent iterations (§4.8.1)."""
+"""Token budget controller for Agent iterations (§4.8.1, task 2C3)."""
 
 from __future__ import annotations
+
+
+class TokenBudgetExhausted(Exception):
+    """Raised when the token budget is fully consumed."""
 
 
 class TokenBudget:
@@ -28,6 +32,13 @@ class TokenBudget:
     @property
     def used(self) -> int:
         return self._used
+
+    def check_and_raise(self) -> None:
+        """Raise :class:`TokenBudgetExhausted` if the budget is exhausted."""
+        if self.exhausted:
+            raise TokenBudgetExhausted(
+                f"Token budget exhausted: used {self._used} / {self._max}"
+            )
 
     def reset(self) -> None:
         self._used = 0
