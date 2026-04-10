@@ -7,10 +7,10 @@ import re
 from typing import Any
 
 from src.agent.tools.base_tool import BaseTool
+from src.retrieval.sql_search import SQLSearch, SQLSearchError
 
 logger = logging.getLogger(__name__)
 
-# Blocked SQL keywords (write operations)
 _WRITE_KEYWORDS = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|GRANT|REVOKE)\b",
     re.IGNORECASE,
@@ -18,10 +18,22 @@ _WRITE_KEYWORDS = re.compile(
 
 
 class SQLQueryTool(BaseTool):
-    """Execute read-only parameterized SQL queries against PostgreSQL."""
+    """Execute read-only parameterized SQL queries against PostgreSQL.
 
-    def __init__(self, db_pool: Any = None) -> None:
-        self._pool = db_pool
+    Accepts either a ``SQLSearch`` instance or a raw ``asyncpg.Pool``.
+    """
+
+    def __init__(
+        self,
+        sql_search: SQLSearch | None = None,
+        db_pool: Any = None,
+    ) -> None:
+        if sql_search is not None:
+            self._search = sql_search
+        elif db_pool is not None:
+            self._search = SQLSearch(db_pool)
+        else:
+            self._search = None
 
     @property
     def name(self) -> str:
@@ -39,7 +51,7 @@ class SQLQueryTool(BaseTool):
         return {
             "type": "object",
             "properties": {
-                "query": {
+                "sql": {
                     "type": "string",
                     "description": "SQL SELECT query with $1, $2... parameter placeholders",
                 },
@@ -49,25 +61,27 @@ class SQLQueryTool(BaseTool):
                     "description": "Parameters for the SQL query",
                 },
             },
-            "required": ["query"],
+            "required": ["sql"],
         }
 
     async def execute(self, **kwargs: Any) -> dict[str, Any]:
-        query = kwargs.get("query", "")
+        sql = kwargs.get("sql", kwargs.get("query", ""))
         params = kwargs.get("params", [])
 
         # Security: block write operations
-        if _WRITE_KEYWORDS.search(query):
-            return {"error": "Write operations are not allowed", "results": []}
+        if _WRITE_KEYWORDS.search(sql):
+            return {"error": "Write operations are not allowed", "rows": [], "column_names": []}
 
-        if self._pool is None:
-            return {"error": "Database connection not available", "results": []}
+        if self._search is None:
+            return {"error": "Database connection not available", "rows": [], "column_names": []}
 
         try:
-            async with self._pool.acquire() as conn:
-                rows = await conn.fetch(query, *params)
-                results = [dict(row) for row in rows]
-                return {"results": results, "total": len(results)}
-        except Exception as e:
+            result = await self._search.execute(sql, params)
+            return result
+        except ValueError as exc:
+            return {"error": str(exc), "rows": [], "column_names": []}
+        except SQLSearchError as exc:
+            return {"error": str(exc), "rows": [], "column_names": []}
+        except Exception as exc:
             logger.exception("SQL query failed")
-            return {"error": str(e), "results": []}
+            return {"error": str(exc), "rows": [], "column_names": []}
