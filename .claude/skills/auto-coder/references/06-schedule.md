@@ -97,36 +97,36 @@ main ─────────────────────────
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 1B1 | Docker Compose 基础设施编排 (PG/Milvus/Redis) | [ ] | | |
-| 1B2 | PostgreSQL Schema 初始化 (Alembic) | [ ] | | |
-| 1B3 | Milvus Collection 与索引创建 | [ ] | | |
-| 1B4 | 基础设施健康检查脚本 | [ ] | | |
+| 1B1 | Docker Compose 基础设施编排 (PG/Milvus/Redis) | [x] | 2026-04-10 | |
+| 1B2 | PostgreSQL Schema 初始化 (Alembic) | [x] | 2026-04-10 | |
+| 1B3 | Milvus Collection 与索引创建 | [x] | 2026-04-10 | |
+| 1B4 | 基础设施健康检查脚本 | [x] | 2026-04-10 | |
 
 ##### 子阶段 1C：模型微服务
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 1C1 | BGE-M3 Embedding FastAPI 微服务 | [ ] | | |
-| 1C2 | bce-reranker FastAPI 微服务 | [ ] | | |
-| 1C3 | LM Studio 安装与验证 | [ ] | | |
+| 1C1 | BGE-M3 Embedding FastAPI 微服务 | [x] | 2026-04-10 | |
+| 1C2 | bce-reranker FastAPI 微服务 | [x] | 2026-04-10 | |
+| 1C3 | LM Studio 安装与验证 | [x] | 2026-04-10 | |
 
 ##### 子阶段 1D：FastAPI Gateway 基建
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 1D1 | FastAPI App 骨架 + Health/Readiness 端点 | [ ] | | |
-| 1D2 | DI 容器 (dependencies.py) | [ ] | | |
-| 1D3 | JWT Auth 中间件 (RS256) | [ ] | | |
-| 1D4 | Rate Limiter 中间件 (Redis Token Bucket) | [ ] | | |
-| 1D5 | Request Logger 中间件 | [ ] | | |
+| 1D1 | FastAPI App 骨架 + Health/Readiness 端点 | [x] | 2026-04-10 | |
+| 1D2 | DI 容器 (dependencies.py) | [x] | 2026-04-10 | |
+| 1D3 | JWT Auth 中间件 (RS256) | [x] | 2026-04-10 | |
+| 1D4 | Rate Limiter 中间件 (Redis Token Bucket) | [x] | 2026-04-10 | |
+| 1D5 | Request Logger 中间件 | [x] | 2026-04-10 | |
 
 ##### 子阶段 1E：Kùzu 图谱 + Agent 骨架
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 1E1 | Kùzu 图数据库初始化脚本 (6 节点表 + 7 关系表) | [ ] | | |
-| 1E2 | BaseGraphStore 抽象接口 + KuzuGraphStore 实现 | [ ] | | |
-| 1E3 | Agent Orchestrator 骨架 + BaseTool + ToolRegistry | [ ] | | |
+| 1E1 | Kùzu 图数据库初始化脚本 (6 节点表 + 7 关系表) | [x] | 2026-04-10 | |
+| 1E2 | BaseGraphStore 抽象接口 + KuzuGraphStore 实现 | [x] | 2026-04-10 | |
+| 1E3 | Agent Orchestrator 骨架 + BaseTool + ToolRegistry | [x] | 2026-04-10 | |
 
 #### Phase 2：Agentic RAG + Graph RAG Core
 
@@ -134,40 +134,40 @@ main ─────────────────────────
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 2A1 | MilvusStore (BaseVectorStore 实现) | [ ] | | |
-| 2A2 | BGE-M3 Client (BaseEmbedding 实现) | [ ] | | |
-| 2A3 | bce-reranker Client (BaseReranker 实现) | [ ] | | |
-| 2A4 | LMStudio LLM Client (BaseLLM 实现) | [ ] | | |
-| 2A5 | BaseGraphStore + KuzuGraphStore + GraphStoreFactory | [ ] | | |
-| 2A6 | Kùzu Schema 初始化脚本 | [ ] | | |
+| 2A1 | MilvusStore (BaseVectorStore 实现) | [x] | 2026-04-10 | |
+| 2A2 | BGE-M3 Client (BaseEmbedding 实现) | [x] | 2026-04-10 | |
+| 2A3 | bce-reranker Client (BaseReranker 实现) | [x] | 2026-04-10 | |
+| 2A4 | LMStudio LLM Client (BaseLLM 实现) | [x] | 2026-04-10 | |
+| 2A5 | BaseGraphStore + KuzuGraphStore + GraphStoreFactory | [x] | 2026-04-10 | |
+| 2A6 | Kùzu Schema 初始化脚本 | [x] | 2026-04-10 | |
 
 ##### 子阶段 2B：Retrieval 检索层
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 2B1 | Milvus 原生 Hybrid Search (Dense+Sparse+RRF) | [ ] | | |
-| 2B2 | Graph Search (Kùzu Cypher 查询封装) | [ ] | | |
-| 2B3 | Reranker 编排 (bce-reranker 远程调用 + Fallback) | [ ] | | |
-| 2B4 | 多路结果融合 (fusion.py) | [ ] | | |
+| 2B1 | Milvus 原生 Hybrid Search (Dense+Sparse+RRF) | [x] | 2026-04-10 | |
+| 2B2 | Graph Search (Kùzu Cypher 查询封装) | [x] | 2026-04-10 | |
+| 2B3 | Reranker 编排 (bce-reranker 远程调用 + Fallback) | [x] | 2026-04-10 | |
+| 2B4 | 多路结果融合 (fusion.py) | [x] | 2026-04-10 | |
 
 ##### 子阶段 2C：Agent 框架
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 2C1 | BaseTool + ToolRegistry 自动发现 | [ ] | | |
-| 2C2 | AgentOrchestrator ReAct 主循环 | [ ] | | |
-| 2C3 | TokenBudget + SafetyGuardrails + Structured Output Validator | [ ] | | |
-| 2C4 | rag_search Tool (Hybrid + Graph Boost) | [ ] | | |
-| 2C5 | graph_query Tool (4 种图查询) | [ ] | | |
-| 2C6 | sql_query Tool (参数化 PG 查询) | [ ] | | |
+| 2C1 | BaseTool + ToolRegistry 自动发现 | [x] | 2026-04-10 | |
+| 2C2 | AgentOrchestrator ReAct 主循环 | [x] | 2026-04-10 | |
+| 2C3 | TokenBudget + SafetyGuardrails + Structured Output Validator | [x] | 2026-04-10 | |
+| 2C4 | rag_search Tool (Hybrid + Graph Boost) | [x] | 2026-04-10 | |
+| 2C5 | graph_query Tool (4 种图查询) | [x] | 2026-04-10 | |
+| 2C6 | sql_query Tool (参数化 PG 查询) | [x] | 2026-04-10 | |
 
 ##### 子阶段 2D：Core 服务层
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 2D1 | ConversationManager (Redis Session) | [ ] | | |
-| 2D2 | QueryRewriter (LLM 代词消解) | [ ] | | |
-| 2D3 | GPTCache 语义缓存 | [ ] | | |
+| 2D1 | ConversationManager (Redis Session) | [x] | 2026-04-10 | |
+| 2D2 | QueryRewriter (LLM 代词消解) | [x] | 2026-04-10 | |
+| 2D3 | GPTCache 语义缓存 | [x] | 2026-04-10 | |
 
 #### Phase 3：Data Engineering Pipeline
 
@@ -175,29 +175,29 @@ main ─────────────────────────
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 3A1 | PDF 三级表格提取 (pdfplumber→Camelot→PaddleOCR) | [ ] | | |
-| 3A2 | LLM 结构化参数抽取 (表格→JSON→PG) | [ ] | | |
-| 3A3 | Datasheet 感知分片器 | [ ] | | |
-| 3A4 | 表格专用分片器 (table_chunker) | [ ] | | |
+| 3A1 | PDF 三级表格提取 (pdfplumber→Camelot→PaddleOCR) | [x] | 2026-04-10 | |
+| 3A2 | LLM 结构化参数抽取 (表格→JSON→PG) | [x] | 2026-04-10 | |
+| 3A3 | Datasheet 感知分片器 | [x] | 2026-04-10 | |
+| 3A4 | 表格专用分片器 (table_chunker) | [x] | 2026-04-10 | |
 
 ##### 子阶段 3B：Celery 异步任务链
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 3B1 | Celery 基座 + 配置 + Worker 启动 | [ ] | | |
-| 3B2 | Ingestion 单步 Tasks (download→dedup→extract→chunk→embed→store) | [ ] | | |
-| 3B3 | Graph Sync Task (PG→Kùzu 增量同步) | [ ] | | |
-| 3B4 | Task Chain 编排 + 优先级队列 | [ ] | | |
-| 3B5 | 任务进度 WebSocket 推送 | [ ] | | |
+| 3B1 | Celery 基座 + 配置 + Worker 启动 | [x] | 2026-04-10 | |
+| 3B2 | Ingestion 单步 Tasks (download→dedup→extract→chunk→embed→store) | [x] | 2026-04-10 | |
+| 3B3 | Graph Sync Task (PG→Kùzu 增量同步) | [x] | 2026-04-10 | |
+| 3B4 | Task Chain 编排 + 优先级队列 | [x] | 2026-04-10 | |
+| 3B5 | 任务进度 WebSocket 推送 | [x] | 2026-04-10 | |
 
 ##### 子阶段 3C：数据采集三路
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 3C1 | 手动上传 API (POST /api/v1/documents/upload) | [ ] | | |
-| 3C2 | Watchdog 内网目录监听 | [ ] | | |
-| 3C3 | Playwright 定时爬虫 (ST/TI/NXP) | [ ] | | |
-| 3C4 | DocumentManager 跨存储协调删除 | [ ] | | |
+| 3C1 | 手动上传 API (POST /api/v1/documents/upload) | [x] | 2026-04-10 | |
+| 3C2 | Watchdog 内网目录监听 | [x] | 2026-04-10 | |
+| 3C3 | Playwright 定时爬虫 (ST/TI/NXP) | [x] | 2026-04-10 | |
+| 3C4 | DocumentManager 跨存储协调删除 | [x] | 2026-04-10 | |
 
 #### Phase 4：Structured Query Tools
 
@@ -205,24 +205,24 @@ main ─────────────────────────
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 4A1 | chip_compare Tool (SQL 参数对比 + LLM 分析) | [ ] | | |
-| 4A2 | 芯片对比 API 端点 (POST /api/v1/compare) | [ ] | | |
+| 4A1 | chip_compare Tool (SQL 参数对比 + LLM 分析) | [x] | 2026-04-13 | |
+| 4A2 | 芯片对比 API 端点 (POST /api/v1/compare) | [x] | 2026-04-13 | |
 
 ##### 子阶段 4B：选型推荐 Tool
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 4B1 | chip_select Tool (结构化过滤 + 语义排序) | [ ] | | |
-| 4B2 | 国产替代匹配 (chip_alternatives 集成) | [ ] | | |
-| 4B3 | chip_alternatives 数据填充脚本 | [ ] | | |
+| 4B1 | chip_select Tool (结构化过滤 + 语义排序) | [x] | 2026-04-13 | |
+| 4B2 | 国产替代匹配 (chip_alternatives 集成) | [x] | 2026-04-13 | |
+| 4B3 | chip_alternatives 数据填充脚本 | [x] | 2026-04-13 | |
 
 ##### 子阶段 4C：BOM 审查 Tool
 
 | 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
 |---------|---------|------|---------|------|
-| 4C1 | bom_review Tool (Excel 解析 + 型号匹配) | [ ] | | |
-| 4C2 | EOL/NRND 检测 + 参数冲突检测 | [ ] | | |
-| 4C3 | 替代料自动推荐 | [ ] | | |
+| 4C1 | bom_review Tool (Excel 解析 + 型号匹配) | [x] | 2026-04-13 | |
+| 4C2 | EOL/NRND 检测 + 参数冲突检测 | [x] | 2026-04-13 | |
+| 4C3 | 替代料自动推荐 | [x] | 2026-04-13 | |
 
 #### Phase 5：Advanced Features
 
@@ -292,13 +292,13 @@ main ─────────────────────────
 
 | Phase | 总任务数 | 已完成 | 进度 |
 |-------|---------|--------|------|
-| Phase 1 | 18 | 3 | 17% |
-| Phase 2 | 19 | 0 | 0% |
-| Phase 3 | 13 | 0 | 0% |
-| Phase 4 | 8 | 0 | 0% |
+| Phase 1 | 18 | 18 | 100% |
+| Phase 2 | 19 | 19 | 100% |
+| Phase 3 | 13 | 13 | 100% |
+| Phase 4 | 8 | 8 | 100% |
 | Phase 5 | 9 | 0 | 0% |
 | Phase 6 | 11 | 0 | 0% |
-| **总计** | **78** | **3** | **4%** |
+| **总计** | **78** | **58** | **74%** |
 
 ---
 
