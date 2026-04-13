@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from src.agent.tools.base_tool import BaseTool
+from src.libs.embedding.base import BaseEmbedding
 from src.libs.llm.base import BaseLLM
+from src.libs.vector_store.base import BaseVectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +19,17 @@ _PROMPT_PATH = Path("config/prompts/chip_comparison.txt")
 class ChipCompareTool(BaseTool):
     """Compare parameters of 2-5 chips side by side."""
 
-    def __init__(self, db_pool: Any = None, llm: BaseLLM | None = None) -> None:
+    def __init__(
+        self,
+        db_pool: Any = None,
+        llm: BaseLLM | None = None,
+        vector_store: BaseVectorStore | None = None,
+        embedding: BaseEmbedding | None = None,
+    ) -> None:
         self._pool = db_pool
         self._llm = llm
+        self._vector_store = vector_store
+        self._embedding = embedding
         self._prompt = self._load_prompt()
 
     @staticmethod
@@ -91,12 +101,48 @@ class ChipCompareTool(BaseTool):
             except Exception:
                 logger.warning("LLM comparison analysis failed", exc_info=True)
 
+        # Milvus retrieval for per-chip design notes (graceful degradation)
+        citations = await self._fetch_citations(chip_names)
+
         return {
             "comparison_table": comparison_table,
             "analysis": analysis_text,
             "chips": chip_names,
-            "citations": [],
+            "citations": citations,
         }
+
+    async def _fetch_citations(
+        self, chip_names: list[str], top_k: int = 3
+    ) -> list[dict[str, Any]]:
+        """Retrieve top-k design notes per chip from Milvus (optional)."""
+        if not self._vector_store or not self._embedding:
+            return []
+
+        citations: list[dict[str, Any]] = []
+        for name in chip_names:
+            try:
+                query_text = f"{name} design considerations errata"
+                emb = await self._embedding.encode([query_text], return_sparse=False)
+                if not emb.dense:
+                    continue
+                results = await self._vector_store.query(
+                    vector=emb.dense[0],
+                    top_k=top_k,
+                    filters={"part_number": name},
+                )
+                for r in results:
+                    citations.append(
+                        {
+                            "chip": name,
+                            "chunk_id": getattr(r, "chunk_id", None),
+                            "text": getattr(r, "text", ""),
+                            "score": getattr(r, "score", 0.0),
+                            "source": getattr(r, "source", ""),
+                        }
+                    )
+            except Exception:
+                logger.warning("Citation fetch failed for %s", name, exc_info=True)
+        return citations
 
     async def _fetch_chip_params(
         self, part_number: str, dimensions: list[str] | None = None

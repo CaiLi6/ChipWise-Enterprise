@@ -1,8 +1,10 @@
 # ChipWise Enterprise — Copilot Instructions
 
-> **同步说明**: 本文件与项目根目录 `CLAUDE.md` 内容基本一致。修改时请同步更新两份文件。最近同步版本: ENTERPRISE_DEV_SPEC v5.0 (2026-04-09)。
+> **同步说明**: 本文件与项目根目录 `CLAUDE.md` 内容保持同步。修改时请同步更新两份文件。最近同步版本: ENTERPRISE_DEV_SPEC v5.0 (2026-04-13)。
 
-**ChipWise Enterprise** is a chip data intelligence retrieval and analysis platform for semiconductor hardware teams. It uses **Agentic RAG** (ReAct Agent + Tool Calling) and **Graph RAG** (Kùzu knowledge graph) to provide natural-language chip parameter queries, comparisons, BOM review, and test case generation. All compute runs locally on a single AMD Ryzen AI 395 machine (128 GB RAM, LM Studio for multi-model inference (primary reasoning model + lightweight router model)).
+**ChipWise Enterprise** is a chip data intelligence retrieval and analysis platform for semiconductor hardware teams. It uses **Agentic RAG** (ReAct Agent + Tool Calling) and **Graph RAG** (Kùzu knowledge graph) to provide natural-language chip parameter queries, comparisons, BOM review, and test case generation. All compute runs locally on a single AMD Ryzen AI 395 machine (128 GB RAM, LM Studio for multi-model inference).
+
+All 6 development phases are complete. Architecture spec: `docs/ENTERPRISE_DEV_SPEC.md` (v5.0). Task breakdown: `docs/DEVELOPMENT_PLAN.md` (78 tasks).
 
 ---
 
@@ -12,14 +14,9 @@
 # Start infrastructure (PostgreSQL, Milvus, Redis)
 docker-compose up -d
 
-# Initialize PostgreSQL schema
+# Initialize schemas
 alembic upgrade head
-# or: python scripts/init_db.py
-
-# Initialize Milvus collections
 python scripts/init_milvus.py
-
-# Initialize Kùzu knowledge graph
 python scripts/init_kuzu.py
 
 # Start model microservices (BGE-M3 :8001, bce-reranker :8002)
@@ -34,37 +31,46 @@ celery -A src.ingestion.tasks worker -Q heavy -c 1 -n worker2@%h
 celery -A src.ingestion.tasks worker -Q crawler -c 1 -n worker3@%h
 celery -A src.ingestion.tasks beat --loglevel=info
 
-# Health check all services
+# Health check
 python scripts/healthcheck.py
+# Or: curl http://localhost:8080/readiness
 ```
 
-LM Studio must be running separately at `http://localhost:1234/v1` with both the primary reasoning model and router model loaded (configured in `config/settings.yaml` under `llm.primary.model` and `llm.router.model`).
+LM Studio must be running separately at `http://localhost:1234/v1` with both the primary reasoning model (35B) and router model (1.7B) loaded.
 
 ---
 
 ## Tests
 
 ```bash
-# All tests
-pytest -q
-
-# Single test file
-pytest -q tests/unit/test_settings.py
-
-# Unit tests only (no Docker required)
-pytest -q -m unit
-
-# Integration tests (requires Docker infra running)
-pytest -q -m integration
-
-# Smoke import check
-pytest -q tests/unit/test_smoke_imports.py
-
-# Syntax/importability check only
-python -m compileall src
+pytest -q                                        # All tests
+pytest -q tests/unit/test_settings.py            # Single file
+pytest -q -m unit                                # Unit only (no Docker)
+pytest -q -m integration                         # Requires Docker infra
+pytest -q tests/unit/test_smoke_imports.py       # Fast import smoke check
+python -m compileall src                         # Syntax check
 ```
 
-Test markers: `unit`, `integration`, `e2e`, `load`. Integration tests assume Docker services are healthy. `load/locustfile.py` is used for 20-user concurrency testing.
+Markers: `unit`, `integration`, `e2e`, `load`. `asyncio_mode = "auto"` — async tests need no decorator. Load tests use `tests/load/locustfile.py`.
+
+**FastAPI unit tests** use `app.dependency_overrides` to mock auth and the orchestrator:
+```python
+app.dependency_overrides[get_current_user] = lambda: _TEST_USER
+app.dependency_overrides[get_orchestrator] = lambda: mock_orch
+```
+
+---
+
+## Code Quality & Linting
+
+```bash
+ruff check src tests        # Lint (line-length 120, rules: E/F/W/I/N/UP/B/A/SIM)
+ruff format src tests       # Format
+mypy src                    # Type check
+pytest --cov=src --cov-report=html   # Coverage (targets: Libs ≥90%, Core ≥80%, API ≥70%)
+```
+
+All code must pass `ruff check` and `mypy` before committing.
 
 ---
 
@@ -74,29 +80,36 @@ Seven-layer architecture:
 
 | Layer | Components |
 |-------|-----------|
-| **1 Frontend** | Gradio (MVP) → Vue3 + Element Plus (production) |
-| **2 API Gateway** | FastAPI :8080 — JWT auth, rate limiting, CORS, request logging |
+| **1 Frontend** | Gradio MVP (`frontend/`) → Vue3 + Element Plus (production) |
+| **2 API Gateway** | FastAPI :8080 — JWT auth, rate limiting, CORS, request tracing |
 | **3 Agent Orchestrator** | ReAct/Tool-Calling loop (max 5 iterations); LLM selects tools dynamically |
 | **4 Core Services** | QueryRewriter, ConversationManager, ResponseBuilder, ReportEngine |
-| **5 Model Services** | LM Studio :1234 (主推理模型 + 路由模型), BGE-M3 :8001, bce-reranker :8002 |
+| **5 Model Services** | LM Studio :1234 (primary + router models), BGE-M3 :8001, bce-reranker :8002 |
 | **6 Storage** | PostgreSQL :5432, Milvus :19530, Redis :6379, Kùzu (embedded) |
 | **7 Libs** | Pluggable abstractions: BaseLLM, BaseEmbedding, BaseVectorStore, BaseReranker, BaseGraphStore |
 
-### Online Request Flow
+**Online flow**: HTTP → JWT + rate limit → SemanticCache (cosine > 0.95) → ConversationManager → AgentOrchestrator (ReAct: Thought → Tool Calls → Observation → Final Answer) → ResponseBuilder
 
-```
-HTTP Request → FastAPI (JWT + rate limit) → GPTCache (cosine > 0.95 → cache hit)
-→ ConversationManager (load Redis session, QueryRewriter for coreference)
-→ AgentOrchestrator (ReAct loop: Thought → Tool Calls → Observation → repeat or Final Answer)
-→ ResponseBuilder (format + citations + write cache + update session)
-→ Return to user
-```
+**Offline ingestion** (Celery chain): download → SHA256 dedup → PDF extract → 3-tier table extract → LLM param extract → chunk → embed → Milvus upsert → PG upsert → Kùzu graph sync
 
-### Offline Ingestion Flow
+---
 
-Celery task chain: `download → SHA256 dedup → PDF text extraction → 3-tier table extraction → LLM param extraction → chunking → BGE-M3 embed → Milvus upsert → PostgreSQL upsert → Kùzu graph sync → notify`
+## API Routers (`src/api/routers/`)
 
-Three ingestion sources: Playwright crawler (scheduled), Watchdog directory monitor, manual REST upload.
+All registered in `src/api/main.py`:
+
+| Router | Prefix | Purpose |
+|--------|--------|---------|
+| `health` | `/health`, `/readiness`, `/liveness` | Health checks |
+| `auth` | `/api/v1/auth` | Local JWT login/refresh |
+| `sso` | `/api/v1/auth/sso` | OIDC login redirect + callback (Keycloak/DingTalk/Feishu) |
+| `query` | `/api/v1/query` | Standard + SSE streaming query (wires to AgentOrchestrator) |
+| `compare` | `/api/v1/compare` | Chip comparison endpoint |
+| `documents` | `/api/v1/documents` | Document upload |
+| `tasks` | `/api/v1/tasks` | Celery task status + WebSocket push |
+| `knowledge` | `/api/v1/knowledge` | Knowledge graph CRUD |
+
+The query router creates the `AgentOrchestrator` as a **lazy module-level singleton** (`_orchestrator_initialized` flag). It returns `None` when LM Studio is unavailable; endpoints return HTTP 503 gracefully.
 
 ---
 
@@ -104,7 +117,7 @@ Three ingestion sources: Playwright crawler (scheduled), Watchdog directory moni
 
 ### Pluggable Abstractions + Factory Pattern
 
-Every backend component has a `Base*` abstract class and a `*Factory` with a `_registry` dict. Switch implementations by changing `config/settings.yaml` — no code changes required.
+Every backend in `src/libs/` has `base.py` (abstract), an implementation, and `factory.py`. Switch implementations by changing `config/settings.yaml` — no code changes required. `LLMFactory` creates separate instances for `primary` (35B) and `router` (1.7B) roles.
 
 ```
 src/libs/
@@ -120,44 +133,55 @@ src/libs/
 Five types flow through the entire pipeline — extend via subclasses, never break the base:
 - `Document` — ingested file metadata
 - `Chunk` — text segment with position info
-- `ChunkRecord` — Chunk + embedding vectors
-- `ProcessedQuery` — rewritten query + conversation context
+- `ChunkRecord` — Chunk + dense/sparse embedding vectors
+- `ProcessedQuery` — rewritten query + conversation context + extracted entities
 - `RetrievalResult` — ranked chunks with citations
+
+### Agent Tools (`src/agent/tools/`)
+
+Each tool inherits `BaseTool` (name, description, parameters_schema, execute). Auto-discovered by `ToolRegistry.discover()`. Adding a capability = new `BaseTool` subclass. Parallel tool calls enabled. Budget: 5 iterations, 8192 tokens max (`TokenBudget`).
+
+Implemented: `rag_search`, `graph_query`, `sql_query`, `chip_compare`, `chip_select`, `bom_review`, `test_case_gen`, `design_rule`, `knowledge_search`, `report_export`.
+
+### SSO/OIDC Authentication (`src/auth/sso/`)
+
+Three providers: `KeycloakProvider`, `DingTalkProvider`, `FeishuProvider` — all inherit `BaseSSOProvider`. CSRF state stored in-memory (`_STATE_STORE` dict, 600s TTL; use Redis in production). `JITProvisioner` creates/updates local users on first login with priority-based role mapping (admin > user > viewer). Flow: `/login` → IdP redirect (state+nonce) → `/callback` → code exchange → JIT provision → issue ChipWise JWT.
 
 ### TraceContext
 
-Every request gets a unique `trace_id`. Each stage calls `trace.record_stage(stage_name, metadata)`. Stored in `logs/traces.jsonl`. Use `TraceContext` from `src/observability/trace_context.py` for all new request paths.
-
-### Configuration
-
-All behavior is controlled by `config/settings.yaml`. Sensitive fields are overridable via environment variables (`PG_PASSWORD`, `REDIS_URL`, `JWT_SECRET_KEY`). Settings are validated on startup via `src/core/settings.py`; missing required fields raise an error with the field path (e.g., `embedding.base_url`).
-
-```yaml
-# LM Studio connection (OpenAI-compatible, multi-model)
-llm:
-  primary:                         # Main reasoning model
-    provider: openai_compatible
-    base_url: "http://localhost:1234/v1"
-    model: "qwen3-35b-q5_k_m"      # Example; any loaded LM Studio model
-    api_key: "lm-studio"
-  router:                          # Lightweight routing model
-    provider: openai_compatible
-    base_url: "http://localhost:1234/v1"
-    model: "qwen3-1.7b-q5_k_m"     # Example; 1-3B class
-    api_key: "lm-studio"
-```
-
-### Agent Tools
-
-Each tool in `src/agent/tools/` inherits `BaseTool` and is auto-discovered by `ToolRegistry`. Adding a new capability = write a new `BaseTool` subclass. The Agent calls tools in parallel when possible (`parallel_tool_calls: true`). Max 5 ReAct iterations and 8192 tokens per request (enforced by `TokenBudget`).
+Every request gets a `trace_id` (from `X-Request-ID` header or auto-generated). Call `trace.record_stage(name, metadata)` in each processing step. Output: `logs/traces.jsonl`. Import from `src/observability/trace_context.py`.
 
 ### Kùzu Knowledge Graph
 
-Kùzu runs **embedded inside the FastAPI process** (no separate service/port). Data directory: `data/kuzu/`. Schema: 6 node tables (`Chip`, `Parameter`, `Errata`, `Document`, `DesignRule`, `Peripheral`) and 7 edge tables. Use openCypher via `conn.execute()`. Graph is synced from PostgreSQL at the end of every ingestion task chain.
+Runs **embedded inside the FastAPI process** (no separate service/port). Data directory: `data/kuzu/`. Schema: 6 node tables (Chip, Parameter, Errata, Document, DesignRule, Peripheral) and 7 edge tables. Synced from PostgreSQL at the end of every ingestion task chain. Use openCypher via `conn.execute()`.
 
 ### Milvus Hybrid Search
 
-BGE-M3 produces both dense (1024-dim) and sparse vectors in a single call. Use `collection.hybrid_search()` with `RRFRanker(k=60)` — no manual BM25 or RRF code. HNSW index: `M=16, efConstruction=256`. Search: `ef=128`.
+BGE-M3 produces both dense (1024-dim) and sparse vectors in a single call. Use `collection.hybrid_search()` with `RRFRanker(k=60)`. HNSW index: M=16, efConstruction=256, search ef=128.
+
+### Configuration
+
+`config/settings.yaml` controls all behavior. Validated on startup by `src/core/settings.py`; missing required fields raise an error with the field path. Secrets override via env vars (`PG_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET_KEY`, `SSO_CLIENT_SECRET`).
+
+```yaml
+llm:
+  primary:
+    provider: openai_compatible
+    base_url: "http://localhost:1234/v1"
+    model: "qwen3-35b-q5_k_m"
+    api_key: "lm-studio"
+  router:
+    provider: openai_compatible
+    base_url: "http://localhost:1234/v1"
+    model: "qwen3-1.7b-q5_k_m"
+    api_key: "lm-studio"
+```
+
+All LLM prompts live in `config/prompts/*.txt` — reference by filename, never hardcode in Python.
+
+### Graceful Degradation
+
+Optional components (Reranker, Graph, Cache, AgentOrchestrator) have `disabled`/`None` modes. Failures must not block the main path. `/readiness` returns `degraded` (not 500) when downstream services are unavailable.
 
 ### Redis Key Namespaces
 
@@ -167,20 +191,16 @@ BGE-M3 produces both dense (1024-dim) and sparse vectors in a single call. Use `
 - `task:progress:{task_id}` — Celery task progress (TTL 86400s)
 - DB 0: app cache + sessions; DB 1: Celery broker + result backend
 
-### Celery Configuration
+### Celery Workers
 
-- `task_acks_late=True` — task is ACKed only after completion (prevents data loss on worker crash)
-- `worker_prefetch_multiplier=1` — fair scheduling
-- Queue routing: `heavy` (PaddleOCR), `embedding`, `crawler`, `default`
-- PaddleOCR is loaded on-demand in `heavy` workers only
+| Worker | Queue | Notes |
+|--------|-------|-------|
+| worker1 | `default`, `embedding` | Main ingestion tasks |
+| worker2 | `heavy` | PaddleOCR (3 GB footprint, loaded on-demand) |
+| worker3 | `crawler` | Playwright crawler, rate-limited per domain |
+| beat | — | Periodic crawler runs (2 AM daily) |
 
-### Graceful Degradation
-
-Each optional component (Reranker, LLM enrichment, Graph sync) has a `disabled`/`None` mode. Failures in optional components must not block the main request path. The `/readiness` endpoint returns `degraded` (not 500) when downstream services are unavailable.
-
-### Prompt Templates
-
-All LLM prompts live in `config/prompts/` as `.txt` files. Reference by filename in code — do not hardcode prompt strings in Python.
+Config: `task_acks_late=True`, `worker_prefetch_multiplier=1`, max 3 retries with exponential backoff (2–60s).
 
 ### Service Ports
 
@@ -198,24 +218,10 @@ All LLM prompts live in `config/prompts/` as `.txt` files. Reference by filename
 
 ---
 
-## Recent Changes
+## Troubleshooting
 
-### 2026-04-09 — DEVELOPMENT_PLAN.md 对齐 §2.9/§2.10/§2.11 和 Phase X 标注
+**"Connection refused" on port X**: Check `docker-compose ps`. For LM Studio: `curl http://localhost:1234/v1/models`.
 
-2C3 新增 StructuredOutputValidator (§2.9)；3A2 新增 Pydantic Schema 校验 + 领域规则；6A3 新增 Token 追踪面板 (§2.11) + TokenTracker；6C2 新增 GitHub Code Scanning (CodeQL) 配置；6D2 新增 CI/CD 工具说明 + Token 监控 + 内存告警；版本引用更新至 2026-04-09。
+**"ModuleNotFoundError: No module named 'src...'"**: Run commands from the project root directory.
 
-### 2026-04-09 — ENTERPRISE_DEV_SPEC.md §4-§7 一致性传播
-
-SonarQube Phase X 传播（5 处: §4.1 横切图、§4.4 目录注释、§5.6 CI/CD YAML、§5.7 质量门、§7 术语表）。§2.9 结构化校验传播（§4.3 STEP 5 加 Pydantic 校验、§4.8.1 Guardrails 图加 Output Validator）。§2.10/§2.11 指标传播（§5.2 补 NDCG@10/EM/F1/Schema 通过率、§5.5 监控面板加 Token 追踪、告警加内存/Schema/Token 阈值）。
-
-### 2026-04-09 — ENTERPRISE_DEV_SPEC.md §2/§3 优化
-
-§1.2 修正 Qdrant/Helm 不一致描述。§2 新增 2.9 结构化输出校验、2.10 RAG 质量评估、2.11 Token 用量追踪；§2.5 GPTCache 加注自研迁移路线；§2.4 PDF 加注 Docling 评估。§3 优化: PG shared_buffers 1→2GB + 峰值策略；§3.3 加注 Jina v3/jina-reranker-v2 迁移路线；§3.5 加注 Dramatiq/Huey 评估；§3.7 SonarQube→Phase X，新增 Ruff/mypy/GitHub Scanning。
-
-### 2026-04-09 — DEVELOPMENT_PLAN.md 完善
-
-格式对齐 `docs/template.md`：顶部添加排期原则 + 阶段总览表 + 集中进度跟踪表（6 Phase）+ 总体进度汇总 + 交付里程碑（M1-M6）。内容对齐 DEV_SPEC v5.0：修正 §4.4 引用、2A4 全面从 Lemonade → LMStudio（`lmstudio_client.py`，:1234）、settings.yaml 补齐 `graph_store`/`agent` 段。
-
-### 2026-04-08 — ENTERPRISE_DEV_SPEC.md §4.4 更新
-
-§4.4 项目目录结构从 ~100 行扩展为 ~374 行完整注释目录树，覆盖所有章节引用的文件。
+**Milvus/PostgreSQL exits immediately**: Check `docker-compose logs milvus` / `docker-compose logs postgres` for port conflicts or disk space.

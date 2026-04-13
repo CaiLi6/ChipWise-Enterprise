@@ -2,32 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+
+from src.agent.tools.chip_compare import ChipCompareTool
+from src.api.schemas.compare import CompareRequest, CompareResponse
 
 router = APIRouter(prefix="/api/v1", tags=["compare"])
 
 
-class CompareRequest(BaseModel):
-    chip_names: list[str] = Field(..., min_length=2, max_length=5)
-    dimensions: list[str] | None = None
-
-
-class CompareResponse(BaseModel):
-    comparison_table: dict[str, Any] = {}
-    analysis: str = ""
-    chips: list[str] = []
-    citations: list[Any] = []
-
-
 @router.post("/compare", response_model=CompareResponse)
 async def compare_chips(req: CompareRequest) -> CompareResponse:
-    """Direct chip comparison endpoint (bypasses Agent orchestrator)."""
-    # In production, inject ChipCompareTool via DI
-    from src.agent.tools.chip_compare import ChipCompareTool
+    """Direct chip comparison endpoint (bypasses Agent orchestrator).
 
+    JWT auth is enforced by the global middleware (see src/api/middleware/auth.py).
+    """
     tool = ChipCompareTool()
     result = await tool.execute(
         chip_names=req.chip_names, dimensions=req.dimensions
