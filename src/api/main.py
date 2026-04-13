@@ -108,17 +108,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Register routers
     from src.api.routers.health import router as health_router
     from src.api.routers.auth import router as auth_router
+    from src.api.routers.sso import router as sso_router
     from src.api.routers.documents import router as documents_router
     from src.api.routers.tasks import router as tasks_router
     from src.api.routers.compare import router as compare_router
     from src.api.routers.knowledge import router as knowledge_router
+    from src.api.routers.query import router as query_router
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(sso_router)
     app.include_router(documents_router)
     app.include_router(tasks_router)
     app.include_router(compare_router)
     app.include_router(knowledge_router)
+    app.include_router(query_router)
 
     return app
 

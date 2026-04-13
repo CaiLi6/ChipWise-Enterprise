@@ -3,17 +3,47 @@
 from __future__ import annotations
 
 import json
-import pytest
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from unittest.mock import AsyncMock, MagicMock
 
-from src.api.routers.query import router
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from src.agent.orchestrator import AgentResult, AgentStep
+from src.api.middleware.auth import get_current_user
+from src.api.routers.query import get_orchestrator, router
+from src.api.schemas.auth import UserInfo
+
+
+def _make_mock_orchestrator(answer: str = "Mock agent answer") -> MagicMock:
+    """Build a mock AgentOrchestrator that returns a fixed answer."""
+    step = AgentStep(thought="mock thought", observations=[])
+    result = AgentResult(
+        answer=answer,
+        tool_calls_log=[step],
+        total_tokens=42,
+        iterations=1,
+    )
+    mock_orch = MagicMock()
+    mock_orch.run = AsyncMock(return_value=result)
+    return mock_orch
+
+
+_TEST_USER = UserInfo(sub="test-sub-001", username="test_user", role="user", department="")
 
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
+    mock_orch = _make_mock_orchestrator()
+
     app = FastAPI()
     app.include_router(router)
+
+    # Override auth and orchestrator dependencies so tests run without
+    # a real JWT or LM Studio instance.
+    app.dependency_overrides[get_current_user] = lambda: _TEST_USER
+    app.dependency_overrides[get_orchestrator] = lambda: mock_orch
+
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -31,6 +61,26 @@ class TestQueryEndpoint:
         assert "answer" in data
         assert "citations" in data
         assert isinstance(data["citations"], list)
+
+    def test_query_answer_from_orchestrator(self, client: TestClient) -> None:
+        resp = client.post("/api/v1/query", json={"query": "test"})
+        assert resp.status_code == 200
+        assert resp.json()["answer"] == "Mock agent answer"
+
+
+@pytest.mark.unit
+class TestQueryUnavailable:
+    """Query endpoint returns 503 when orchestrator is None."""
+
+    def test_returns_503_when_no_orchestrator(self) -> None:
+        app = FastAPI()
+        app.include_router(router)
+        app.dependency_overrides[get_current_user] = lambda: _TEST_USER
+        app.dependency_overrides[get_orchestrator] = lambda: None
+
+        with TestClient(app, raise_server_exceptions=False) as c:
+            resp = c.post("/api/v1/query", json={"query": "test"})
+        assert resp.status_code == 503
 
 
 @pytest.mark.unit
