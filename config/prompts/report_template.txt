@@ -1,0 +1,14 @@
+Generate a professional chip evaluation report.
+
+Title: {title}
+
+Data:
+{data}
+
+Include sections:
+1. Executive Summary
+2. Key Parameters
+3. Design Considerations
+4. Recommendations
+
+Keep the report concise and suitable for hardware engineers.

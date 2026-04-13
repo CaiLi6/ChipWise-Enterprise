@@ -1,0 +1,11 @@
+Extract all design rules and guidelines from this text.
+
+Return a JSON array where each item has:
+- "rule_type": one of "decoupling_cap", "layout", "thermal", "power_seq", "clock", "esd", "io_config"
+- "rule_text": the full rule or recommendation text
+- "severity": one of "mandatory", "recommendation", "note"
+
+Text:
+{text}
+
+Return ONLY the JSON array, no other text.
