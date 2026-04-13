@@ -1,0 +1,22 @@
+[
+  {"id": "q001", "query": "What is the maximum CPU frequency of STM32F407?", "expected_keywords": ["168", "MHz"], "tool": "rag_search"},
+  {"id": "q002", "query": "Compare STM32F407 and GD32F407 supply voltage", "expected_keywords": ["3.3", "VCC"], "tool": "chip_compare"},
+  {"id": "q003", "query": "List MCUs with VCC range 1.8V to 3.6V", "expected_keywords": ["MCU", "1.8", "3.6"], "tool": "chip_select"},
+  {"id": "q004", "query": "What are the errata for STM32F407 ADC?", "expected_keywords": ["ADC", "errata"], "tool": "design_rule_check"},
+  {"id": "q005", "query": "Generate test cases for STM32F407", "expected_keywords": ["test", "VCC", "frequency"], "tool": "test_case_gen"},
+  {"id": "q006", "query": "What is the domestic alternative for STM32F407?", "expected_keywords": ["GD32", "alternative"], "tool": "chip_select"},
+  {"id": "q007", "query": "What design rules apply to STM32F407 power supply?", "expected_keywords": ["decoupling", "100nF"], "tool": "design_rule_check"},
+  {"id": "q008", "query": "Show chip parameters for STM32F407", "expected_keywords": ["parameter", "MHz", "V"], "tool": "sql_query"},
+  {"id": "q009", "query": "Search team notes about SPI timing", "expected_keywords": ["SPI", "timing"], "tool": "knowledge_search"},
+  {"id": "q010", "query": "What is the flash size of STM32F407?", "expected_keywords": ["flash", "1MB"], "tool": "rag_search"},
+  {"id": "q011", "query": "Compare power consumption of STM32F103 vs GD32F103", "expected_keywords": ["power", "mA"], "tool": "chip_compare"},
+  {"id": "q012", "query": "Find chips with package LQFP48", "expected_keywords": ["LQFP48", "package"], "tool": "chip_select"},
+  {"id": "q013", "query": "What peripherals does STM32F407 have?", "expected_keywords": ["UART", "SPI", "I2C"], "tool": "rag_search"},
+  {"id": "q014", "query": "What are the temperature range specs for STM32F407?", "expected_keywords": ["-40", "85", "°C"], "tool": "sql_query"},
+  {"id": "q015", "query": "Show all chips from STMicroelectronics", "expected_keywords": ["ST", "STM32"], "tool": "chip_select"},
+  {"id": "q016", "query": "What are the GPIO count of STM32F407?", "expected_keywords": ["GPIO", "140"], "tool": "rag_search"},
+  {"id": "q017", "query": "Compare STM32F407 ADC resolution with ESP32", "expected_keywords": ["12-bit", "ADC"], "tool": "chip_compare"},
+  {"id": "q018", "query": "Find chips compatible with 5V power supply", "expected_keywords": ["5V", "tolerant"], "tool": "chip_select"},
+  {"id": "q019", "query": "What is the RAM size of STM32F407?", "expected_keywords": ["192", "KB", "RAM"], "tool": "rag_search"},
+  {"id": "q020", "query": "List all errata for STM32F4 series", "expected_keywords": ["errata", "STM32F4"], "tool": "design_rule_check"}
+]

@@ -1,0 +1,60 @@
+{
+  "title": "ChipWise Overview",
+  "uid": "chipwise-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Service Health",
+      "type": "stat",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 4},
+      "targets": [{"expr": "up", "legendFormat": "{{job}}"}]
+    },
+    {
+      "id": 2,
+      "title": "Request QPS",
+      "type": "graph",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "targets": [{"expr": "rate(http_requests_total[1m])", "legendFormat": "QPS"}]
+    },
+    {
+      "id": 3,
+      "title": "LLM Token Usage (§2.11)",
+      "type": "graph",
+      "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+      "targets": [
+        {
+          "expr": "rate(chipwise_llm_tokens_total{token_type='prompt'}[5m])",
+          "legendFormat": "Prompt Tokens ({{model}}/{{role}})"
+        },
+        {
+          "expr": "rate(chipwise_llm_tokens_total{token_type='completion'}[5m])",
+          "legendFormat": "Completion Tokens ({{model}}/{{role}})"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "P95 Latency",
+      "type": "graph",
+      "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+      "targets": [{"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))", "legendFormat": "P95"}]
+    },
+    {
+      "id": 5,
+      "title": "Cache Hit Rate",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 4},
+      "targets": [{"expr": "rate(chipwise_cache_hits_total[5m]) / (rate(chipwise_cache_hits_total[5m]) + rate(chipwise_cache_misses_total[5m]))", "legendFormat": "Hit Rate"}]
+    },
+    {
+      "id": 6,
+      "title": "Ingestion Queue Depth",
+      "type": "stat",
+      "gridPos": {"x": 12, "y": 12, "w": 12, "h": 4},
+      "targets": [{"expr": "chipwise_ingestion_queue_depth", "legendFormat": "Queue Depth"}]
+    }
+  ]
+}
