@@ -9,8 +9,9 @@ import subprocess
 
 import pytest
 
+pytestmark = [pytest.mark.integration, pytest.mark.integration_nollm]
 
-@pytest.mark.integration
+
 class TestDockerInfraHealth:
     """Verify all three infrastructure containers are healthy."""
 

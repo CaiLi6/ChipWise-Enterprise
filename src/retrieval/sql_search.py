@@ -49,10 +49,7 @@ class SQLSearch:
         try:
             async with self._pool.acquire() as conn:
                 rows = await conn.fetch(sql, *(params or []))
-                if rows:
-                    column_names = list(rows[0].keys())
-                else:
-                    column_names = []
+                column_names = list(rows[0].keys()) if rows else []
                 return {
                     "rows": [dict(row) for row in rows],
                     "column_names": column_names,

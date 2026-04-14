@@ -9,7 +9,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from scripts.init_kuzu import (
     EXPECTED_NODE_TABLES,
     EXPECTED_REL_TABLES,
@@ -17,8 +16,9 @@ from scripts.init_kuzu import (
     verify_schema,
 )
 
+pytestmark = [pytest.mark.integration, pytest.mark.integration_nollm]
 
-@pytest.mark.integration
+
 class TestKuzuSchemaInit:
     """Test Kùzu schema creation and verification using real Kùzu."""
 

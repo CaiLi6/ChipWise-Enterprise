@@ -28,9 +28,9 @@ class SSOProviderFactory:
 
 # Auto-register known providers
 def _auto_register() -> None:
-    from src.auth.sso.keycloak import KeycloakProvider
     from src.auth.sso.dingtalk import DingTalkProvider
     from src.auth.sso.feishu import FeishuProvider
+    from src.auth.sso.keycloak import KeycloakProvider
 
     SSOProviderFactory.register("keycloak", KeycloakProvider)
     SSOProviderFactory.register("dingtalk", DingTalkProvider)

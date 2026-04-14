@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 # Import available routers for testing
 from src.api.routers.auth import router as auth_router

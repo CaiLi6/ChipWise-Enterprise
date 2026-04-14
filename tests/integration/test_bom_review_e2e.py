@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 
 import pytest
-
 from src.agent.tools.bom_review import BOMReviewTool
 
 pytestmark = pytest.mark.integration

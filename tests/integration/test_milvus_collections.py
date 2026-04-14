@@ -8,8 +8,9 @@ from __future__ import annotations
 import pytest
 from pymilvus import Collection, connections, utility
 
+pytestmark = [pytest.mark.integration, pytest.mark.integration_nollm]
 
-@pytest.mark.integration
+
 class TestMilvusCollections:
     """Verify Milvus collections exist with correct schema and indexes."""
 

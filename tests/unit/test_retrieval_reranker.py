@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from src.core.types import RetrievalResult
-from src.libs.reranker.base import BaseReranker, NoneReranker, RerankResult
+from src.libs.reranker.base import BaseReranker, RerankResult
 from src.retrieval.reranker import CoreReranker
 
 

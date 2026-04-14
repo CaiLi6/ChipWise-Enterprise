@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import random
 
@@ -11,7 +10,8 @@ try:
 except ImportError:
     # Allow syntax check without locust installed
     HttpUser = object  # type: ignore[assignment, misc]
-    between = lambda a, b: None  # type: ignore[assignment]
+    def between(a, b):  # type: ignore[assignment]
+        return None
     def task(weight: int):  # type: ignore[misc]
         return lambda fn: fn
 

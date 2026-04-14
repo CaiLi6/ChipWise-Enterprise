@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from src.ingestion.errata_parser import parse_errata_document
-
 
 _FIXTURE = Path(__file__).parents[1] / "fixtures" / "sample_errata.txt"
 

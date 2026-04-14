@@ -5,10 +5,9 @@ from __future__ import annotations
 import base64
 import json
 import time
-
-import pytest
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from src.api.middleware.oidc_auth import OIDCAuthMiddleware
 
 
@@ -59,9 +58,9 @@ class TestVerifyToken:
         }
         token = _make_jwt(payload)
 
-        with patch.object(middleware, "get_jwks", new=AsyncMock(return_value={})):
-            with pytest.raises(ValueError, match="expired"):
-                await middleware.verify_token(token)
+        with patch.object(middleware, "get_jwks", new=AsyncMock(return_value={})), \
+                pytest.raises(ValueError, match="expired"):
+            await middleware.verify_token(token)
 
     @pytest.mark.asyncio
     async def test_wrong_issuer_raises(self, middleware: OIDCAuthMiddleware) -> None:
@@ -73,9 +72,9 @@ class TestVerifyToken:
         }
         token = _make_jwt(payload)
 
-        with patch.object(middleware, "get_jwks", new=AsyncMock(return_value={})):
-            with pytest.raises(ValueError, match="Issuer"):
-                await middleware.verify_token(token)
+        with patch.object(middleware, "get_jwks", new=AsyncMock(return_value={})), \
+                pytest.raises(ValueError, match="Issuer"):
+            await middleware.verify_token(token)
 
     @pytest.mark.asyncio
     async def test_wrong_audience_raises(self, middleware: OIDCAuthMiddleware) -> None:
@@ -87,9 +86,9 @@ class TestVerifyToken:
         }
         token = _make_jwt(payload)
 
-        with patch.object(middleware, "get_jwks", new=AsyncMock(return_value={})):
-            with pytest.raises(ValueError, match="Audience"):
-                await middleware.verify_token(token)
+        with patch.object(middleware, "get_jwks", new=AsyncMock(return_value={})), \
+                pytest.raises(ValueError, match="Audience"):
+            await middleware.verify_token(token)
 
     @pytest.mark.asyncio
     async def test_malformed_jwt_raises(self, middleware: OIDCAuthMiddleware) -> None:
@@ -117,8 +116,9 @@ class TestVerifyToken:
 class TestJWKSCache:
     @pytest.mark.asyncio
     async def test_jwks_cached_after_first_fetch(self, middleware: OIDCAuthMiddleware) -> None:
-        from src.api.middleware.oidc_auth import _JWKS_CACHE
         from unittest.mock import MagicMock
+
+        from src.api.middleware.oidc_auth import _JWKS_CACHE
 
         jwks_data = {"keys": [{"kid": "key1", "kty": "RSA"}]}
         discovery = {"jwks_uri": "https://sso.example.com/jwks"}

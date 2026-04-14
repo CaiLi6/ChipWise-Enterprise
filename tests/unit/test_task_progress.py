@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
 
-from fastapi.testclient import TestClient
+import pytest
 from fastapi import FastAPI
-
+from fastapi.testclient import TestClient
 from src.api.routers.tasks import router, set_redis
 
 

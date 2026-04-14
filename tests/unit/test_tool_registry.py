@@ -9,11 +9,11 @@ Acceptance criteria:
 
 from __future__ import annotations
 
-import pytest
 from typing import Any
 
-from src.agent.tools.base_tool import BaseTool
+import pytest
 from src.agent.tool_registry import ToolRegistry
+from src.agent.tools.base_tool import BaseTool
 
 
 # ------------------------------------------------------------------
@@ -197,7 +197,7 @@ class TestDiscovery:
         """If a tool name is already registered, discover() skips it."""
         reg = ToolRegistry()
         # First discover
-        count1 = reg.discover("src.agent.tools")
+        _count1 = reg.discover("src.agent.tools")
         # Second discover — same tools already registered → no new additions
         count2 = reg.discover("src.agent.tools")
         assert count2 == 0

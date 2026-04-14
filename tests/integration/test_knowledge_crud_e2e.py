@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
-
-from src.api.routers.knowledge import router
 import src.api.routers.knowledge as knowledge_mod
-
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from src.api.routers.knowledge import router
 
 pytestmark = pytest.mark.integration
 

@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import time
-from unittest.mock import patch
-
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-
 from src.api.middleware.auth import (
     JWT_AUDIENCE,
     JWT_ISSUER,
@@ -66,7 +62,7 @@ def _make_test_app(auth_settings: AuthSettings) -> FastAPI:
     app = FastAPI()
 
     @app.get("/protected")
-    async def protected(user: UserInfo = Depends(get_current_user)):
+    async def protected(user: UserInfo = Depends(get_current_user)):  # noqa: B008
         return {"username": user.username, "role": user.role}
 
     @app.get("/admin-only", dependencies=[Depends(require_role("admin"))])
@@ -305,8 +301,6 @@ class TestAuthRouter:
 
     def test_register_login_e2e(self, auth_settings, auth_client) -> None:
         """Full flow: register → login → use token → access protected endpoint."""
-        from src.api.dependencies import override_settings
-        from src.core.settings import Settings
 
         # Register
         reg = auth_client.post(

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 
 # ── Fixtures ────────────────────────────────────────────────────────
 
@@ -182,7 +181,7 @@ class TestSparseVectorFormat:
         )
         data = resp.json()
         sparse = data["sparse"][0]
-        assert all(isinstance(k, str) for k in sparse.keys())
+        assert all(isinstance(k, str) for k in sparse)
 
     def test_sparse_values_are_floats(self, ready_client) -> None:
         resp = ready_client.post(

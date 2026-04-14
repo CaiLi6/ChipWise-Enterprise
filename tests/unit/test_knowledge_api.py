@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 from fastapi import FastAPI
-
-from src.api.routers.knowledge import router, _notes
+from fastapi.testclient import TestClient
+from src.api.routers.knowledge import router
 
 
 @pytest.fixture(autouse=True)

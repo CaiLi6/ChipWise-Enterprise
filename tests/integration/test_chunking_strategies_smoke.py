@@ -6,7 +6,6 @@ Marked @pytest.mark.integration — NOT run in default pytest.
 from __future__ import annotations
 
 import pytest
-
 from src.core.types import Chunk
 from src.ingestion.chunking.factory import create_chunker
 
@@ -31,8 +30,9 @@ Conversion time: 0.5 us at 12-bit resolution.
 
 _STRATEGIES = ["datasheet", "fine", "coarse", "parent_child"]
 
+pytestmark = [pytest.mark.integration, pytest.mark.integration_nollm]
 
-@pytest.mark.integration
+
 class TestChunkingStrategiesSmoke:
     """Smoke tests: each strategy produces valid chunks from sample text."""
 

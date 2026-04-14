@@ -5,9 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from src.core.report_engine import ReportEngine
-
 
 _DATA = {
     "summary": "STM32F407 is an ARM Cortex-M4 MCU running at 168MHz.",
@@ -95,7 +93,7 @@ class TestReportEnginePDF:
 class TestOutputDirectory:
     def test_output_dir_auto_created(self, tmp_path: Path) -> None:
         nested = str(tmp_path / "nested" / "dir")
-        engine = ReportEngine(output_dir=nested)
+        _engine = ReportEngine(output_dir=nested)
         assert Path(nested).exists()
 
     def test_excel_file_in_output_dir(self, tmp_path: Path) -> None:

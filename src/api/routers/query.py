@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -41,10 +42,10 @@ def _get_or_create_orchestrator() -> Any:
 
     _orchestrator_initialized = True
     try:
+        from src.agent.orchestrator import AgentConfig, AgentOrchestrator
+        from src.agent.tool_registry import ToolRegistry
         from src.api.dependencies import get_settings
         from src.libs.llm.factory import LLMFactory
-        from src.agent.tool_registry import ToolRegistry
-        from src.agent.orchestrator import AgentOrchestrator, AgentConfig
 
         settings = get_settings()
         llm = LLMFactory.create(settings.model_dump(), role="primary")
@@ -118,8 +119,8 @@ def _extract_citations(tool_calls_log: list[Any]) -> list[dict[str, Any]]:
 async def query(
     req: QueryRequest,
     request: Request,
-    current_user: UserInfo = Depends(get_current_user),
-    orchestrator: Any = Depends(get_orchestrator),
+    current_user: UserInfo = Depends(get_current_user),  # noqa: B008
+    orchestrator: Any = Depends(get_orchestrator),  # noqa: B008
 ) -> QueryResponse:
     """Standard (non-streaming) query endpoint — delegates to AgentOrchestrator.
 
@@ -176,8 +177,8 @@ async def query(
 async def stream_query(
     req: QueryRequest,
     request: Request,
-    current_user: UserInfo = Depends(get_current_user),
-    orchestrator: Any = Depends(get_orchestrator),
+    current_user: UserInfo = Depends(get_current_user),  # noqa: B008
+    orchestrator: Any = Depends(get_orchestrator),  # noqa: B008
 ) -> StreamingResponse:
     """SSE streaming query endpoint.
 

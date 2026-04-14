@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
-from typing import Any
 
+import pytest
 from src.libs.graph_store.base import BaseGraphStore
 from src.retrieval.graph_search import GraphSearch
 

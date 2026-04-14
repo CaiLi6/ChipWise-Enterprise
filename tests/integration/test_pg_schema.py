@@ -9,6 +9,8 @@ import os
 
 import pytest
 
+pytestmark = [pytest.mark.integration, pytest.mark.integration_nollm]
+
 EXPECTED_TABLES = [
     "chips", "chip_parameters", "documents", "document_images",
     "users", "bom_records", "bom_items", "knowledge_notes",
@@ -23,7 +25,6 @@ KEY_INDEXES = [
 ]
 
 
-@pytest.mark.integration
 class TestPgSchema:
     """Verify Alembic migration creates all expected tables and indexes."""
 

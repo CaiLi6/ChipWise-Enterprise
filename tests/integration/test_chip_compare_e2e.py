@@ -5,9 +5,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from src.agent.tools.chip_compare import ChipCompareTool
-
 
 pytestmark = pytest.mark.integration
 

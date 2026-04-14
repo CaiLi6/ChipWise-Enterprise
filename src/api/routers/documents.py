@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +18,7 @@ ALLOWED_EXTENSIONS = {".pdf", ".xlsx"}
 
 @router.post("/upload")
 async def upload_document(
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     manufacturer: str = Form("unknown"),
     collection: str = Form("default"),
 ) -> dict[str, Any]:
@@ -47,7 +46,7 @@ async def upload_document(
 
     try:
         from src.ingestion.tasks import create_ingestion_chain
-        chain = create_ingestion_chain(
+        _chain = create_ingestion_chain(
             url=str(dest_path), manufacturer=manufacturer, priority=9
         )
         # In production: result = chain.apply_async()

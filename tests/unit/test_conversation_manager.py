@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
-import pytest
 from unittest.mock import AsyncMock
 
-from src.core.conversation_manager import ConversationManager, MAX_TURNS, SESSION_TTL
+import pytest
+from src.core.conversation_manager import MAX_TURNS, SESSION_TTL, ConversationManager
 
 
 @pytest.mark.unit

@@ -7,6 +7,7 @@ They are skipped automatically when the API is unreachable.
 from __future__ import annotations
 
 import os
+
 import pytest
 
 pytestmark = pytest.mark.e2e

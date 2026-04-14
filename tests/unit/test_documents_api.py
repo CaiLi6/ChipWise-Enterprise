@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import io
-import pytest
 from unittest.mock import patch
 
-from fastapi.testclient import TestClient
+import pytest
 from fastapi import FastAPI
-
+from fastapi.testclient import TestClient
 from src.api.routers.documents import router
 
 

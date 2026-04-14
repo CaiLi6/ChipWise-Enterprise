@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
-from src.agent.safety.guardrails import SafetyGuardrails, MaxIterationExceeded
+from src.agent.safety.guardrails import MaxIterationExceededError, SafetyGuardrails
 
 
 @pytest.mark.unit
@@ -71,5 +70,5 @@ class TestSafetyGuardrails:
 
     def test_check_iteration_limit_exceeded(self) -> None:
         sg = SafetyGuardrails()
-        with pytest.raises(MaxIterationExceeded):
+        with pytest.raises(MaxIterationExceededError):
             sg.check_iteration_limit(5, 5)

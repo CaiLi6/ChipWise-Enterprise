@@ -94,25 +94,22 @@ class StructuredOutputValidator:
             name_lower = p.name.lower()
 
             # Frequency must be positive
-            if "freq" in name_lower or "clock" in name_lower:
-                if val < 0:
-                    warnings.append(DomainWarning(
-                        param_name=p.name, message="Frequency must be >= 0", value=val
-                    ))
+            if ("freq" in name_lower or "clock" in name_lower) and val < 0:
+                warnings.append(DomainWarning(
+                    param_name=p.name, message="Frequency must be >= 0", value=val
+                ))
 
             # Voltage range: 0.1 – 100 V
-            if "voltage" in name_lower or name_lower in ("vcc", "vdd", "vio"):
-                if not (0.1 <= val <= 100):
-                    warnings.append(DomainWarning(
-                        param_name=p.name, message="Voltage outside 0.1–100V range", value=val
-                    ))
+            if ("voltage" in name_lower or name_lower in ("vcc", "vdd", "vio")) and not (0.1 <= val <= 100):
+                warnings.append(DomainWarning(
+                    param_name=p.name, message="Voltage outside 0.1–100V range", value=val
+                ))
 
             # Temperature range: -273 – +500 °C
-            if "temp" in name_lower:
-                if not (-273 <= val <= 500):
-                    warnings.append(DomainWarning(
-                        param_name=p.name, message="Temperature outside -273–500°C range", value=val
-                    ))
+            if "temp" in name_lower and not (-273 <= val <= 500):
+                warnings.append(DomainWarning(
+                    param_name=p.name, message="Temperature outside -273–500°C range", value=val
+                ))
 
         return warnings
 

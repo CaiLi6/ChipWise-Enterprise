@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-
-from src.libs.llm.base import BaseLLM, LLMResponse, ToolCall
-from src.libs.llm.lmstudio_client import LMStudioClient
+import pytest
+from src.libs.llm.base import BaseLLM, LLMResponse
 from src.libs.llm.factory import LLMFactory
+from src.libs.llm.lmstudio_client import LMStudioClient
 
 
 def _mock_chat_response(text: str = "Hello!", tool_calls: list | None = None) -> dict[str, Any]:
@@ -88,17 +87,17 @@ class TestLMStudioClient:
     async def test_timeout_raises(self) -> None:
         client = LMStudioClient(base_url="http://fake:1234/v1", timeout=1.0)
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.TimeoutException("timeout")):
-            with pytest.raises(httpx.TimeoutException):
-                await client.chat([{"role": "user", "content": "test"}])
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.TimeoutException("timeout")), \
+                pytest.raises(httpx.TimeoutException):
+            await client.chat([{"role": "user", "content": "test"}])
 
     @pytest.mark.asyncio
     async def test_connection_error_retries(self) -> None:
         client = LMStudioClient(base_url="http://fake:1234/v1")
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("refused")):
-            with pytest.raises(httpx.ConnectError):
-                await client.generate("test")
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("refused")), \
+                pytest.raises(httpx.ConnectError):
+            await client.generate("test")
 
     @pytest.mark.asyncio
     async def test_health_check_ok(self) -> None:

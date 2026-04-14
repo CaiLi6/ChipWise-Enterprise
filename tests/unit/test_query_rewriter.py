@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
 from src.core.query_rewriter import QueryRewriter
 from src.libs.llm.base import LLMResponse
 
@@ -51,7 +51,7 @@ class TestQueryRewriter:
     @pytest.mark.asyncio
     async def test_this_pronoun(self, rewriter: QueryRewriter, llm: AsyncMock) -> None:
         history = [{"role": "user", "content": "Show me TPS65217"}]
-        result = await rewriter.rewrite("这个芯片的电压", history)
+        _result = await rewriter.rewrite("这个芯片的电压", history)
         llm.generate.assert_called_once()
 
     @pytest.mark.asyncio

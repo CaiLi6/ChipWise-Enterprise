@@ -10,10 +10,10 @@ Acceptance criteria:
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from src.agent.tools.sql_query import SQLQueryTool
 from src.retrieval.sql_search import SQLSearch, SQLSearchError
 
@@ -27,7 +27,10 @@ def _make_mock_pool(rows: list[dict[str, Any]] | None = None, error: Exception |
     if error:
         mock_conn.fetch.side_effect = error
     else:
-        mock_conn.fetch.return_value = [MagicMock(**{"keys.return_value": list((rows or [{}])[0].keys()), **r}) for r in (rows or [])]
+        mock_conn.fetch.return_value = [
+            MagicMock(**{"keys.return_value": list((rows or [{}])[0].keys()), **r})
+            for r in (rows or [])
+        ]
         # Make dict(row) work
         result_rows = []
         for r in (rows or []):
@@ -128,7 +131,7 @@ class TestSQLQueryTool:
         mock_search = AsyncMock(spec=SQLSearch)
         mock_search.execute.return_value = {"rows": [], "column_names": []}
         tool = SQLQueryTool(sql_search=mock_search)
-        result = await tool.execute(query="SELECT 1")
+        _result = await tool.execute(query="SELECT 1")
         mock_search.execute.assert_called_once()
 
     def test_openai_tool_format(self) -> None:

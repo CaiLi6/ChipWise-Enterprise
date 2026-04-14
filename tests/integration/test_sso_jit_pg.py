@@ -8,7 +8,6 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from src.auth.sso.base import SSOUserInfo
 from src.auth.sso.jit_provisioning import JITProvisioner
 
@@ -47,7 +46,9 @@ def _make_pool_mock(fetchrow_return=None):
     return pool, conn
 
 
-@pytest.mark.unit
+pytestmark = [pytest.mark.integration, pytest.mark.integration_nollm]
+
+
 class TestJITProvisionerPG:
     """Test JITProvisioner._provision_pg with mock asyncpg pool."""
 
@@ -107,7 +108,7 @@ class TestJITProvisionerPG:
 
         provisioner = JITProvisioner(db_pool=pool)
         user = _make_user(sub="shared-sub", provider="dingtalk")
-        result = await provisioner.provision(user)
+        _result = await provisioner.provision(user)
 
         # SELECT should have used both provider and sub
         select_call = conn.fetchrow.call_args_list[0]

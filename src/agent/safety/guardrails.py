@@ -23,8 +23,12 @@ _INJECTION_PATTERNS = [
 ]
 
 
-class MaxIterationExceeded(Exception):
+class MaxIterationExceededError(Exception):
     """Raised when the agent exceeds maximum iterations."""
+
+
+# Backward-compatible alias
+MaxIterationExceeded = MaxIterationExceededError
 
 
 class SafetyGuardrails:
@@ -56,14 +60,12 @@ class SafetyGuardrails:
 
     def validate_tool_call(self, tool_name: str, arguments: dict[str, Any]) -> bool:
         """Return True if a tool call is permitted."""
-        if self._registered_tools and tool_name not in self._registered_tools:
-            return False
-        return True
+        return not (self._registered_tools and tool_name not in self._registered_tools)
 
     def check_iteration_limit(self, current: int, max_iter: int) -> None:
-        """Raise MaxIterationExceeded if limit is reached."""
+        """Raise MaxIterationExceededError if limit is reached."""
         if current >= max_iter:
-            raise MaxIterationExceeded(
+            raise MaxIterationExceededError(
                 f"Agent reached maximum iterations ({max_iter})"
             )
 

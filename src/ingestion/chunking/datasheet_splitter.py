@@ -8,7 +8,6 @@ from typing import Any
 from src.core.types import Chunk
 from src.ingestion.chunking.base import BaseChunker
 
-
 # Section heading patterns
 _SECTION_PATTERN = re.compile(
     r"^(?:"
@@ -62,7 +61,7 @@ class DatasheetSplitter(BaseChunker):
             return []
 
         # Step 1: Mark table regions as atomic blocks
-        table_ranges = self._get_table_ranges(text, tables)
+        _table_ranges = self._get_table_ranges(text, tables)
 
         # Step 2: Split into sections at heading boundaries
         sections = self._split_by_sections(text)

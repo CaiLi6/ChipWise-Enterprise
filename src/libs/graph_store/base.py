@@ -49,5 +49,5 @@ class BaseGraphStore(ABC):
     def health_check(self) -> bool:
         """Return True if the graph store is reachable and operational."""
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027
         """Release resources. Override if the backend needs cleanup."""

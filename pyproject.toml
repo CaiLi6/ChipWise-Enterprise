@@ -65,6 +65,7 @@ testpaths = ["tests"]
 markers = [
     "unit: Unit tests (no external dependencies)",
     "integration: Integration tests (requires Docker infrastructure)",
+    "integration_nollm: Integration tests runnable without LM Studio (PG/Milvus/Redis/Kuzu only)",
     "e2e: End-to-end tests (full system running)",
     "load: Load/performance tests",
 ]

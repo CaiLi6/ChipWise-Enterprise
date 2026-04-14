@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
-from src.ingestion.crawler import DatasheetCrawler, MANUFACTURER_CONFIGS
+import pytest
+from src.ingestion.crawler import MANUFACTURER_CONFIGS, DatasheetCrawler
 
 
 @pytest.mark.unit

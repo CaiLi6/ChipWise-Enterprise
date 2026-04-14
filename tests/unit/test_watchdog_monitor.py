@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import time
-import pytest
 
-from src.ingestion.watchdog_monitor import DatasheetWatchdog, DEBOUNCE_SECONDS
+import pytest
+from src.ingestion.watchdog_monitor import DEBOUNCE_SECONDS, DatasheetWatchdog
 
 
 @pytest.mark.unit

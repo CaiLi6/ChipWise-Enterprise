@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
 from pathlib import Path
+from unittest.mock import MagicMock
 
+import pytest
 from src.agent.tools.report_export import ReportExportTool
 from src.core.report_engine import ReportEngine
 

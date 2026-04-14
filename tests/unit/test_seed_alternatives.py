@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
+import pytest
 from scripts.seed_data import import_alternatives
 
 

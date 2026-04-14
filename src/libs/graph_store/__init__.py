@@ -5,7 +5,7 @@ Public API:
 """
 
 from src.libs.graph_store.base import BaseGraphStore
-from src.libs.graph_store.kuzu_store import KuzuGraphStore
 from src.libs.graph_store.factory import GraphStoreFactory
+from src.libs.graph_store.kuzu_store import KuzuGraphStore
 
 __all__ = ["BaseGraphStore", "KuzuGraphStore", "GraphStoreFactory"]

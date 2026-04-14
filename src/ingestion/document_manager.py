@@ -109,7 +109,8 @@ class DocumentManager:
         part_number = doc_info.get("part_number", "")
         if part_number and self._redis:
             try:
-                import json, time
+                import json
+                import time
                 await self._redis.publish(
                     f"cache:invalidate:{part_number}",
                     json.dumps({"part_number": part_number, "timestamp": time.time()}),

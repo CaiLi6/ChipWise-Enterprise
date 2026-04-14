@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
+import pytest
 from src.ingestion.tasks import (
-    validate_and_dedup,
-    extract_text,
-    extract_tables,
-    extract_structured_params,
     chunk_text,
-    embed_chunks,
-    store_vectors,
-    store_metadata,
     create_ingestion_chain,
+    embed_chunks,
+    extract_structured_params,
+    extract_tables,
+    extract_text,
+    store_metadata,
+    store_vectors,
+    validate_and_dedup,
 )
 
 

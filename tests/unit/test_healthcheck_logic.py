@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from scripts.healthcheck import (
     ServiceStatus,
+    _build_dsn,
+    _build_redis_url,
     check_all,
     check_kuzu,
     check_milvus,
     check_postgres,
     check_redis,
-    _build_dsn,
-    _build_redis_url,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -251,7 +248,7 @@ class TestCheckAll:
             )
 
         settings = _make_settings()
-        results = check_all(settings)
+        results = check_all(settings, local=True)
 
         assert len(results) == 4
         assert all(s.healthy for s in results.values())
@@ -276,7 +273,7 @@ class TestCheckAll:
         )
 
         settings = _make_settings()
-        results = check_all(settings)
+        results = check_all(settings, local=True)
 
         assert len(results) == 4
         assert results["PostgreSQL"].healthy is True
@@ -301,7 +298,7 @@ class TestCheckAll:
             )
 
         settings = _make_settings()
-        results = check_all(settings)
+        results = check_all(settings, local=True)
 
         assert not any(s.healthy for s in results.values())
 

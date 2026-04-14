@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from src.agent.orchestrator import AgentResult, AgentStep
 from src.api.middleware.auth import get_current_user
 from src.api.routers.query import get_orchestrator, router

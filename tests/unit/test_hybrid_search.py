@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
-from typing import Any
 
+import pytest
 from src.core.types import RetrievalResult
 from src.libs.embedding.base import BaseEmbedding, EmbeddingResult
 from src.libs.vector_store.base import BaseVectorStore
@@ -59,7 +58,7 @@ class TestHybridSearch:
         emb = AsyncMock(spec=BaseEmbedding)
         emb.encode.return_value = EmbeddingResult(dense=[[0.1] * 1024], sparse=[], dimensions=1024)
         hs = HybridSearch(emb, mock_store)
-        results = await hs.search("test")
+        _results = await hs.search("test")
         mock_store.query.assert_called_once()
         mock_store.hybrid_search.assert_not_called()
 

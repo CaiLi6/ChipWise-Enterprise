@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from src.api.dependencies import (
     EmbeddingClient,
     RerankerClient,
@@ -16,7 +14,6 @@ from src.api.dependencies import (
     override_settings,
 )
 from src.core.settings import Settings
-
 
 # ── Fixtures ────────────────────────────────────────────────────────
 

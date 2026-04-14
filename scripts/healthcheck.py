@@ -162,6 +162,27 @@ def check_kuzu(db_path: str) -> ServiceStatus:
         )
 
 
+# ── Model service checks (skipped in --local mode) ──────────────────
+
+
+def check_http_service(name: str, url: str) -> ServiceStatus:
+    """Check an HTTP service by hitting its base URL or /v1/models."""
+    start = time.monotonic()
+    try:
+        import urllib.request
+
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=CONNECT_TIMEOUT_S) as resp:
+            resp.read()
+        elapsed = (time.monotonic() - start) * 1000
+        return ServiceStatus(name=name, healthy=True, latency_ms=round(elapsed, 2), message="OK")
+    except Exception as exc:
+        elapsed = (time.monotonic() - start) * 1000
+        return ServiceStatus(
+            name=name, healthy=False, latency_ms=round(elapsed, 2), message=str(exc),
+        )
+
+
 # ── Aggregate check ─────────────────────────────────────────────────
 
 
@@ -180,11 +201,12 @@ def _build_redis_url(redis_settings) -> str:
     return f"redis://{redis_settings.host}:{redis_settings.port}/{redis_settings.db}"
 
 
-def check_all(settings) -> dict[str, ServiceStatus]:
+def check_all(settings, *, local: bool = False) -> dict[str, ServiceStatus]:
     """Run all health checks and return a mapping of service name → status.
 
     Args:
         settings: A ``Settings`` instance (from ``src.core.settings``).
+        local: If True, skip LM Studio / Embedding / Reranker checks.
 
     Returns:
         dict mapping service name to its ``ServiceStatus``.
@@ -202,6 +224,14 @@ def check_all(settings) -> dict[str, ServiceStatus]:
 
     kuzu_path = settings.graph_store.kuzu.db_path
     results["Kùzu"] = check_kuzu(kuzu_path)
+
+    if not local:
+        lm_base = "http://localhost:1234/v1"
+        if hasattr(settings, "llm") and hasattr(settings.llm, "primary"):
+            lm_base = getattr(settings.llm.primary, "base_url", lm_base)
+        results["LM Studio"] = check_http_service("LM Studio", f"{lm_base}/models")
+        results["Embedding"] = check_http_service("Embedding (BGE-M3)", "http://localhost:8001/health")
+        results["Reranker"] = check_http_service("Reranker (BCE)", "http://localhost:8002/health")
 
     return results
 
@@ -238,6 +268,11 @@ def main() -> int:
         choices=["postgres", "milvus", "redis", "kuzu"],
         help="Check a single service instead of all",
     )
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Local mode: skip LM Studio / Embedding / Reranker checks (Docker infra only)",
+    )
     args = parser.parse_args()
 
     # Import here to avoid import errors when settings module isn't ready
@@ -257,7 +292,7 @@ def main() -> int:
         result = dispatch[args.service]()
         results = {result.name: result}
     else:
-        results = check_all(settings)
+        results = check_all(settings, local=args.local)
 
     _print_results(results)
 

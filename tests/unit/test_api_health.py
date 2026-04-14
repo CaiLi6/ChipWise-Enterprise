@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from src.api.main import APP_VERSION, create_app
 from src.core.settings import Settings
-
 
 # ── Fixtures ────────────────────────────────────────────────────────
 

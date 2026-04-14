@@ -5,9 +5,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from src.agent.tools.test_case_gen import TestCaseGenTool
-
 
 pytestmark = pytest.mark.integration
 

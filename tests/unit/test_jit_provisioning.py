@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from src.auth.sso.base import SSOUserInfo
 from src.auth.sso.jit_provisioning import JITProvisioner
 

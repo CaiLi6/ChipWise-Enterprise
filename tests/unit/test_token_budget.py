@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import pytest
-
-from src.agent.safety.token_budget import TokenBudget, TokenBudgetExhausted
+from src.agent.safety.token_budget import TokenBudget, TokenBudgetExhaustedError
 
 
 @pytest.mark.unit
@@ -55,16 +54,16 @@ class TestTokenBudget:
         tb.check_and_raise()  # should not raise
 
     def test_check_and_raise_exhausted(self) -> None:
-        """check_and_raise raises TokenBudgetExhausted when over budget."""
+        """check_and_raise raises TokenBudgetExhaustedError when over budget."""
         tb = TokenBudget(100)
         tb.consume(100)
-        with pytest.raises(TokenBudgetExhausted, match="exhausted"):
+        with pytest.raises(TokenBudgetExhaustedError, match="exhausted"):
             tb.check_and_raise()
 
     def test_check_and_raise_over_budget(self) -> None:
         tb = TokenBudget(100)
         tb.consume(200)
-        with pytest.raises(TokenBudgetExhausted):
+        with pytest.raises(TokenBudgetExhaustedError):
             tb.check_and_raise()
 
     def test_default_max_tokens(self) -> None:

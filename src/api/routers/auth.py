@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
 from src.api.middleware.auth import (
     create_access_token,
@@ -17,7 +16,6 @@ from src.api.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     TokenResponse,
-    UserInfo,
 )
 
 logger = logging.getLogger("chipwise.auth")

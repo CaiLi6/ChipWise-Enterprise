@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 
 from src.api.dependencies import get_db_pool, get_redis, get_settings
-from src.auth.sso.jit_provisioning import JITProvisioner
 from src.api.routers._sso_state import SSOStateStore
+from src.auth.sso.jit_provisioning import JITProvisioner
 
 logger = logging.getLogger("chipwise.sso")
 
@@ -66,7 +66,7 @@ def _build_provider(provider_name: str, settings: Any) -> Any:
 @router.get("/login")
 async def sso_login(
     provider: str = "keycloak",
-    redis: Any = Depends(get_redis),
+    redis: Any = Depends(get_redis),  # noqa: B008
 ) -> RedirectResponse:
     """Initiate SSO login: redirect the user's browser to the identity provider.
 
@@ -103,8 +103,8 @@ async def sso_callback(
     code: str,
     state: str,
     request: Request,
-    redis: Any = Depends(get_redis),
-    db_pool: Any = Depends(get_db_pool),
+    redis: Any = Depends(get_redis),  # noqa: B008
+    db_pool: Any = Depends(get_db_pool),  # noqa: B008
 ) -> dict[str, Any]:
     """Handle IdP authorization callback.
 

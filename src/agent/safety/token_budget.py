@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 
-class TokenBudgetExhausted(Exception):
+class TokenBudgetExhaustedError(Exception):
     """Raised when the token budget is fully consumed."""
+
+
+# Backward-compatible alias
+TokenBudgetExhausted = TokenBudgetExhaustedError
 
 
 class TokenBudget:
@@ -34,9 +38,9 @@ class TokenBudget:
         return self._used
 
     def check_and_raise(self) -> None:
-        """Raise :class:`TokenBudgetExhausted` if the budget is exhausted."""
+        """Raise :class:`TokenBudgetExhaustedError` if the budget is exhausted."""
         if self.exhausted:
-            raise TokenBudgetExhausted(
+            raise TokenBudgetExhaustedError(
                 f"Token budget exhausted: used {self._used} / {self._max}"
             )
 

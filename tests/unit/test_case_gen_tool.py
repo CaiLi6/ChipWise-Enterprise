@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from src.agent.tools.test_case_gen import TestCaseGenTool
 
 
@@ -21,9 +21,18 @@ def _make_pool(rows: list[dict]) -> MagicMock:
 
 
 _SAMPLE_PARAMS = [
-    {"name": "VCC", "typ_value": "3.3", "min_value": "1.8", "max_value": "3.6", "unit": "V", "category": "electrical"},
-    {"name": "Frequency", "typ_value": "168", "min_value": None, "max_value": "168", "unit": "MHz", "category": "timing"},
-    {"name": "Operating Temp", "typ_value": "25", "min_value": "-40", "max_value": "85", "unit": "°C", "category": "thermal"},
+    {
+        "name": "VCC", "typ_value": "3.3", "min_value": "1.8",
+        "max_value": "3.6", "unit": "V", "category": "electrical",
+    },
+    {
+        "name": "Frequency", "typ_value": "168", "min_value": None,
+        "max_value": "168", "unit": "MHz", "category": "timing",
+    },
+    {
+        "name": "Operating Temp", "typ_value": "25", "min_value": "-40",
+        "max_value": "85", "unit": "°C", "category": "thermal",
+    },
 ]
 
 _SAMPLE_CASES = [

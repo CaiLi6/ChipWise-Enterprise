@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import json
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-
+import pytest
 from src.libs.embedding.base import BaseEmbedding, EmbeddingResult
 from src.libs.embedding.bgem3_client import BGEM3Client
 from src.libs.embedding.factory import EmbeddingFactory
@@ -77,9 +75,9 @@ class TestBGEM3Client:
             "500", request=MagicMock(), response=mock_resp
         )
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
-            with pytest.raises(httpx.HTTPStatusError):
-                await client.encode(["test"])
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp), \
+                pytest.raises(httpx.HTTPStatusError):
+            await client.encode(["test"])
 
     @pytest.mark.asyncio
     async def test_timeout_retries(self) -> None:
@@ -90,9 +88,8 @@ class TestBGEM3Client:
             "httpx.AsyncClient.post",
             new_callable=AsyncMock,
             side_effect=httpx.ConnectError("refused"),
-        ):
-            with pytest.raises(httpx.ConnectError):
-                await client.encode(["test"])
+        ), pytest.raises(httpx.ConnectError):
+            await client.encode(["test"])
 
     @pytest.mark.asyncio
     async def test_health_check_ok(self) -> None:

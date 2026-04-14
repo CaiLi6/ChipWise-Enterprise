@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import pytest
 from unittest.mock import AsyncMock
 
-from src.ingestion.design_rule_extractor import extract_design_rules
+import pytest
 from src.core.types import Chunk
+from src.ingestion.design_rule_extractor import extract_design_rules
 
 
 def _make_chunk(content: str, page: int = 1, section: str = "") -> Chunk:
@@ -56,7 +56,11 @@ class TestExtractDesignRules:
         chunks = [_make_chunk("Follow the layout guidelines to minimize EMI.", 3, "PCB Layout")]
         llm = AsyncMock()
         llm.generate.return_value = json.dumps([
-            {"rule_type": "layout", "rule_text": "Minimize trace length for high-speed signals", "severity": "recommendation"}
+            {
+                "rule_type": "layout",
+                "rule_text": "Minimize trace length for high-speed signals",
+                "severity": "recommendation",
+            }
         ])
 
         rules = await extract_design_rules(chunks, chip_id=2, llm=llm)

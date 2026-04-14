@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
-from typing import Any
 
+import pytest
 from src.libs.graph_store.base import BaseGraphStore
-from src.libs.graph_store.kuzu_store import KuzuGraphStore
 from src.libs.graph_store.factory import GraphStoreFactory
+from src.libs.graph_store.kuzu_store import KuzuGraphStore
 
 
 @pytest.mark.unit

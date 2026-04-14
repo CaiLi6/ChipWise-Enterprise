@@ -12,11 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import pytest
 from typing import Any
-from unittest.mock import AsyncMock
 
-from src.agent.orchestrator import AgentOrchestrator, AgentConfig, AgentResult, AgentStep
+import pytest
+from src.agent.orchestrator import AgentConfig, AgentOrchestrator, AgentResult
 from src.agent.prompt_builder import PromptBuilder
 from src.agent.tool_registry import ToolRegistry
 from src.agent.tools.base_tool import BaseTool
@@ -390,7 +389,7 @@ class TestTraceContext:
         ])
         trace = TraceContext(trace_id="test-trace")
         orch = AgentOrchestrator(llm, _make_registry(FakeSearchTool()))
-        result = await orch.run("test", trace=trace)
+        _result = await orch.run("test", trace=trace)
 
         stages = trace.stages
         assert len(stages) >= 2

@@ -5,9 +5,7 @@ from __future__ import annotations
 import os
 
 import pytest
-
 from src.agent.tools.chip_select import ChipSelectTool
-
 
 pytestmark = pytest.mark.integration
 

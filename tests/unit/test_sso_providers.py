@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import pytest
-
 from src.auth.sso.base import BaseSSOProvider, SSOUserInfo
-from src.auth.sso.factory import SSOProviderFactory
-from src.auth.sso.keycloak import KeycloakProvider
 from src.auth.sso.dingtalk import DingTalkProvider
+from src.auth.sso.factory import SSOProviderFactory
 from src.auth.sso.feishu import FeishuProvider
-
+from src.auth.sso.keycloak import KeycloakProvider
 
 _KEYCLOAK_CONFIG = {
     "client_id": "chipwise",

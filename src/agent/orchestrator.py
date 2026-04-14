@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from src.agent.prompt_builder import PromptBuilder
-from src.agent.tool_registry import ToolRegistry
 from src.agent.safety.token_budget import TokenBudget
+from src.agent.tool_registry import ToolRegistry
 from src.libs.llm.base import BaseLLM, LLMResponse, ToolCall
 from src.observability.trace_context import TraceContext
 
@@ -160,7 +160,7 @@ class AgentOrchestrator:
             step.observations = observations
 
             # Append tool results to messages
-            for tc, obs in zip(llm_response.tool_calls, observations):
+            for tc, obs in zip(llm_response.tool_calls, observations, strict=False):
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,

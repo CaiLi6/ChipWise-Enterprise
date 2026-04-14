@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from src.agent.tools.bom_review import BOMReviewTool, BOMItem
+import pytest
+from src.agent.tools.bom_review import BOMItem, BOMReviewTool
 
 
 @pytest.mark.unit

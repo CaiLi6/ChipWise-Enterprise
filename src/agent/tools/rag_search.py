@@ -6,9 +6,9 @@ import logging
 from typing import Any
 
 from src.agent.tools.base_tool import BaseTool
+from src.retrieval.graph_search import GraphSearch
 from src.retrieval.hybrid_search import HybridSearch
 from src.retrieval.reranker import CoreReranker
-from src.retrieval.graph_search import GraphSearch
 
 logger = logging.getLogger(__name__)
 

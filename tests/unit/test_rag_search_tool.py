@@ -9,12 +9,11 @@ Acceptance criteria:
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-from src.core.types import RetrievalResult
-from src.libs.reranker.base import RerankResult
+import pytest
 from src.agent.tools.rag_search import RAGSearchTool
+from src.core.types import RetrievalResult
 
 
 def _mock_retrieval_results(n: int = 5, page: int = 1) -> list[RetrievalResult]:

@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 import csv
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
-
 from src.core.report_engine import ReportEngine
-
 
 _CASES = [
     {"test_item": "VCC nominal", "parameter": "VCC", "condition": "T=25°C",
@@ -112,7 +108,7 @@ class TestCsvExport:
         path = engine.export_test_cases_csv([], "EMPTY_CHIP")
         with open(path, newline="") as f:
             content = f.read()
-        lines = [l for l in content.splitlines() if l]
+        lines = [line for line in content.splitlines() if line]
         assert len(lines) == 1  # Only header
 
     def test_output_dir_created_if_missing(self, tmp_path: Path) -> None:

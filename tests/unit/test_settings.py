@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
-
-from src.core.settings import Settings, load_settings, validate_settings
+from src.core.settings import Settings, load_settings
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 

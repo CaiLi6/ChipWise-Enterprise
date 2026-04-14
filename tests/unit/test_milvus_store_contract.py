@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
+from unittest.mock import patch
 
+import pytest
 from src.core.types import ChunkRecord, RetrievalResult
 from src.libs.vector_store.base import BaseVectorStore
 
@@ -38,7 +38,7 @@ class InMemoryVectorStore(BaseVectorStore):
         collection: str = "datasheet_chunks",
     ) -> list[RetrievalResult]:
         results = []
-        for cid, data in list(self._data.items())[:top_k]:
+        for _cid, data in list(self._data.items())[:top_k]:
             results.append(RetrievalResult(
                 chunk_id=data["chunk_id"],
                 doc_id=data["doc_id"],

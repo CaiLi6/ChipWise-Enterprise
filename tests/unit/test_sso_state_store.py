@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
-
 from src.api.routers._sso_state import SSOStateStore
 
 

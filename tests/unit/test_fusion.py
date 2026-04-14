@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from typing import Any
-
 from src.core.types import RetrievalResult
-from src.retrieval.fusion import MultiSourceFusion, FusedResult
+from src.retrieval.fusion import MultiSourceFusion
 
 
 @pytest.mark.unit

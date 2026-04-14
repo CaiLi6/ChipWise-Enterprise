@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import pytest
-
 from src.agent.safety.output_validator import (
-    StructuredOutputValidator,
     ChipParam,
-    ValidationResult,
+    StructuredOutputValidator,
 )
 
 

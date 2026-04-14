@@ -52,5 +52,5 @@ class BaseVectorStore(ABC):
         """Return True if the vector store is reachable."""
         return True
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # noqa: B027
         """Release resources."""

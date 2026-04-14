@@ -4,21 +4,16 @@ from __future__ import annotations
 
 import json
 import logging
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
-
 from src.api.middleware.request_logger import (
-    QUIET_PATHS,
     RequestLoggerMiddleware,
     _extract_user_agent,
     _extract_user_id,
     _sanitize_headers,
 )
 from src.observability.logger import JSONFormatter
-
 
 # ── Helper sanitization ─────────────────────────────────────────────
 
@@ -112,9 +107,8 @@ class TestRequestLoggerMiddleware:
         app = _build_test_app(suppress_health=False)
         from starlette.testclient import TestClient as StarletteClient
 
-        with caplog.at_level(logging.INFO, logger="chipwise.request"):
-            with StarletteClient(app) as client:
-                client.get("/test")
+        with caplog.at_level(logging.INFO, logger="chipwise.request"), StarletteClient(app) as client:
+            client.get("/test")
 
         json_logs = []
         for record in caplog.records:
@@ -126,7 +120,7 @@ class TestRequestLoggerMiddleware:
                     pass
 
         assert len(json_logs) >= 2  # request_start + request_end
-        events = [l["event"] for l in json_logs]
+        events = [entry["event"] for entry in json_logs]
         assert "request_start" in events
         assert "request_end" in events
 
@@ -135,9 +129,8 @@ class TestRequestLoggerMiddleware:
         app = _build_test_app(suppress_health=False)
         from starlette.testclient import TestClient as StarletteClient
 
-        with caplog.at_level(logging.INFO, logger="chipwise.request"):
-            with StarletteClient(app) as client:
-                client.get("/test")
+        with caplog.at_level(logging.INFO, logger="chipwise.request"), StarletteClient(app) as client:
+            client.get("/test")
 
         for record in caplog.records:
             if record.name == "chipwise.request":
@@ -156,9 +149,8 @@ class TestRequestLoggerMiddleware:
         app = _build_test_app(suppress_health=True)
         from starlette.testclient import TestClient as StarletteClient
 
-        with caplog.at_level(logging.INFO, logger="chipwise.request"):
-            with StarletteClient(app) as client:
-                client.get("/health")
+        with caplog.at_level(logging.INFO, logger="chipwise.request"), StarletteClient(app) as client:
+            client.get("/health")
 
         request_logs = [
             r for r in caplog.records if r.name == "chipwise.request"
@@ -170,9 +162,8 @@ class TestRequestLoggerMiddleware:
         app = _build_test_app(suppress_health=False)
         from starlette.testclient import TestClient as StarletteClient
 
-        with caplog.at_level(logging.INFO, logger="chipwise.request"):
-            with StarletteClient(app) as client:
-                client.get("/health")
+        with caplog.at_level(logging.INFO, logger="chipwise.request"), StarletteClient(app) as client:
+            client.get("/health")
 
         request_logs = [
             r for r in caplog.records if r.name == "chipwise.request"

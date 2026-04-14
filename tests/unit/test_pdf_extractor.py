@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from src.ingestion.pdf_extractor import PDFTableExtractor, ExtractedTable
+import pytest
+from src.ingestion.pdf_extractor import ExtractedTable, PDFTableExtractor
 
 
 @pytest.mark.unit

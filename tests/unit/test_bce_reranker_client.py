@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
-
+import pytest
 from src.libs.reranker.base import BaseReranker, NoneReranker, RerankResult
 from src.libs.reranker.bce_client import BCERerankerClient
 from src.libs.reranker.factory import RerankerFactory
@@ -63,17 +62,17 @@ class TestBCERerankerClient:
             "500", request=MagicMock(), response=mock_resp
         )
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp):
-            with pytest.raises(httpx.HTTPStatusError):
-                await client.rerank("q", ["d"])
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_resp), \
+                pytest.raises(httpx.HTTPStatusError):
+            await client.rerank("q", ["d"])
 
     @pytest.mark.asyncio
     async def test_connection_error_retries(self) -> None:
         client = BCERerankerClient(base_url="http://fake:8002")
 
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("refused")):
-            with pytest.raises(httpx.ConnectError):
-                await client.rerank("q", ["d"])
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.ConnectError("refused")), \
+                pytest.raises(httpx.ConnectError):
+            await client.rerank("q", ["d"])
 
     @pytest.mark.asyncio
     async def test_health_check_ok(self) -> None:

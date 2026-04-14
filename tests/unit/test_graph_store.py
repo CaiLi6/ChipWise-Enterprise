@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
+import pytest
 from src.libs.graph_store.base import BaseGraphStore
-from src.libs.graph_store.kuzu_store import KuzuGraphStore
 from src.libs.graph_store.factory import GraphStoreFactory
+from src.libs.graph_store.kuzu_store import KuzuGraphStore
 
 
 @pytest.mark.unit
@@ -47,7 +47,9 @@ class TestKuzuGraphStore:
         assert rows == []
 
     def test_upsert_node_inserts(self) -> None:
-        self.store.upsert_node("Chip", {"chip_id": "STM32F4", "name": "STM32F407", "manufacturer": "ST"}, key_field="chip_id")
+        self.store.upsert_node(
+            "Chip", {"chip_id": "STM32F4", "name": "STM32F407", "manufacturer": "ST"}, key_field="chip_id",
+        )
         rows = self.store.execute_cypher("MATCH (c:Chip) WHERE c.chip_id = 'STM32F4' RETURN c.name AS name")
         assert len(rows) == 1
         assert rows[0]["name"] == "STM32F407"
@@ -60,15 +62,21 @@ class TestKuzuGraphStore:
         assert len(rows) == 1
 
     def test_upsert_node_updates(self) -> None:
-        self.store.upsert_node("Chip", {"chip_id": "ESP32", "name": "ESP32-WROOM", "manufacturer": "Espressif"}, key_field="chip_id")
-        self.store.upsert_node("Chip", {"chip_id": "ESP32", "name": "ESP32-S3", "manufacturer": "Espressif"}, key_field="chip_id")
+        self.store.upsert_node(
+            "Chip", {"chip_id": "ESP32", "name": "ESP32-WROOM", "manufacturer": "Espressif"}, key_field="chip_id",
+        )
+        self.store.upsert_node(
+            "Chip", {"chip_id": "ESP32", "name": "ESP32-S3", "manufacturer": "Espressif"}, key_field="chip_id",
+        )
         rows = self.store.execute_cypher("MATCH (c:Chip) WHERE c.chip_id = 'ESP32' RETURN c.name AS n")
         assert len(rows) == 1
         assert rows[0]["n"] == "ESP32-S3"
 
     def test_upsert_edge(self) -> None:
         self.store.upsert_node("Chip", {"chip_id": "C1", "name": "Chip1", "manufacturer": "X"}, key_field="chip_id")
-        self.store.upsert_node("Parameter", {"param_id": "P1", "name": "Voltage", "value": "3.3", "unit": "V"}, key_field="param_id")
+        self.store.upsert_node(
+            "Parameter", {"param_id": "P1", "name": "Voltage", "value": "3.3", "unit": "V"}, key_field="param_id",
+        )
         self.store.upsert_edge(
             "HAS_PARAM", "Chip", "C1", "Parameter", "P1",
             from_key_field="chip_id", to_key_field="param_id",
@@ -82,7 +90,9 @@ class TestKuzuGraphStore:
 
     def test_get_subgraph(self) -> None:
         self.store.upsert_node("Chip", {"chip_id": "C2", "name": "Chip2", "manufacturer": "Y"}, key_field="chip_id")
-        self.store.upsert_node("Parameter", {"param_id": "P2", "name": "Clock", "value": "168", "unit": "MHz"}, key_field="param_id")
+        self.store.upsert_node(
+            "Parameter", {"param_id": "P2", "name": "Clock", "value": "168", "unit": "MHz"}, key_field="param_id",
+        )
         self.store.upsert_edge(
             "HAS_PARAM", "Chip", "C2", "Parameter", "P2",
             from_key_field="chip_id", to_key_field="param_id",
@@ -123,7 +133,10 @@ class TestGraphStoreFactory:
                 return []
             def upsert_node(self, label, properties, key_field="id"):
                 pass
-            def upsert_edge(self, rel_type, from_label, from_key, to_label, to_key, properties=None, from_key_field="id", to_key_field="id"):
+            def upsert_edge(
+                self, rel_type, from_label, from_key, to_label, to_key,
+                properties=None, from_key_field="id", to_key_field="id",
+            ):
                 pass
             def get_subgraph(self, start_label, start_key, max_hops=2, key_field="id"):
                 return []

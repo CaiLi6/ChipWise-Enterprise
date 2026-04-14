@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
-
 import config.celery_config as cfg
+import pytest
 
 
 @pytest.mark.unit
