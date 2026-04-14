@@ -91,9 +91,9 @@ class ChipSelectTool(BaseTool):
                     f"Criteria: {criteria}\n\n"
                     "Provide a brief recommendation summary."
                 )
-                summary = await self._llm.generate(
+                summary = str(await self._llm.generate(
                     prompt, temperature=0.3, max_tokens=300
-                )
+                ))
             except Exception:
                 logger.warning("LLM recommendation failed", exc_info=True)
 

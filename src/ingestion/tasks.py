@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import time
 from pathlib import Path
 from typing import Any
 
-from celery import Celery, chain, shared_task
+from celery import Celery, chain, shared_task  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ def _update_progress(
 
 
 @shared_task(bind=True, name="src.ingestion.tasks.download_document", max_retries=3)
-def download_document(self, url: str, manufacturer: str) -> dict[str, Any]:
+def download_document(self: Any, url: str, manufacturer: str) -> dict[str, Any]:
     """Download a PDF from URL to local storage."""
     _update_progress(self.request.id, "downloading", 5, f"Downloading from {url}")
     try:
@@ -62,11 +61,11 @@ def download_document(self, url: str, manufacturer: str) -> dict[str, Any]:
             "file_size": len(resp.content),
         }
     except Exception as exc:
-        raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries) from exc
 
 
 @shared_task(bind=True, name="src.ingestion.tasks.validate_and_dedup")
-def validate_and_dedup(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def validate_and_dedup(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """SHA256 dedup check against PostgreSQL."""
     _update_progress(self.request.id, "dedup", 10, "Validating and deduplicating")
 
@@ -87,7 +86,7 @@ def validate_and_dedup(self, doc_info: dict[str, Any]) -> dict[str, Any]:
 
 
 @shared_task(bind=True, name="src.ingestion.tasks.extract_text")
-def extract_text(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def extract_text(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """Extract full text from PDF."""
     if doc_info.get("skipped"):
         return doc_info
@@ -119,7 +118,7 @@ def extract_text(self, doc_info: dict[str, Any]) -> dict[str, Any]:
     queue="heavy",
     time_limit=300,
 )
-def extract_tables(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def extract_tables(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """Three-tier table extraction (routed to 'heavy' queue)."""
     if doc_info.get("skipped"):
         return doc_info
@@ -153,7 +152,7 @@ def extract_tables(self, doc_info: dict[str, Any]) -> dict[str, Any]:
     time_limit=120,
     max_retries=2,
 )
-def extract_structured_params(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def extract_structured_params(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """LLM-based structured parameter extraction."""
     if doc_info.get("skipped"):
         return doc_info
@@ -167,7 +166,7 @@ def extract_structured_params(self, doc_info: dict[str, Any]) -> dict[str, Any]:
 
 
 @shared_task(bind=True, name="src.ingestion.tasks.chunk_text")
-def chunk_text(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def chunk_text(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """Datasheet-aware chunking."""
     if doc_info.get("skipped"):
         return doc_info
@@ -201,7 +200,7 @@ def chunk_text(self, doc_info: dict[str, Any]) -> dict[str, Any]:
     name="src.ingestion.tasks.embed_chunks",
     queue="embedding",
 )
-def embed_chunks(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def embed_chunks(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """Call BGE-M3 to embed chunks."""
     if doc_info.get("skipped"):
         return doc_info
@@ -214,7 +213,7 @@ def embed_chunks(self, doc_info: dict[str, Any]) -> dict[str, Any]:
 
 
 @shared_task(bind=True, name="src.ingestion.tasks.store_vectors")
-def store_vectors(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def store_vectors(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """Upsert embeddings into Milvus."""
     if doc_info.get("skipped"):
         return doc_info
@@ -225,7 +224,7 @@ def store_vectors(self, doc_info: dict[str, Any]) -> dict[str, Any]:
 
 
 @shared_task(bind=True, name="src.ingestion.tasks.store_metadata")
-def store_metadata(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def store_metadata(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """Write document metadata to PostgreSQL."""
     if doc_info.get("skipped"):
         return doc_info
@@ -236,7 +235,7 @@ def store_metadata(self, doc_info: dict[str, Any]) -> dict[str, Any]:
 
 
 @shared_task(bind=True, name="src.ingestion.tasks.sync_knowledge_graph", max_retries=2)
-def sync_knowledge_graph(self, doc_info: dict[str, Any]) -> dict[str, Any]:
+def sync_knowledge_graph(self: Any, doc_info: dict[str, Any]) -> dict[str, Any]:
     """Sync chip data from PG to Kùzu knowledge graph (§3B3)."""
     if doc_info.get("skipped"):
         return doc_info

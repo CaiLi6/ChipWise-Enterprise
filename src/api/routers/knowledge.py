@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
 
@@ -48,7 +48,7 @@ async def create_note(note: KnowledgeNoteCreate) -> KnowledgeNoteResponse:
         "author_id": 0,
     }
     _notes[note_id] = data
-    return KnowledgeNoteResponse(**data)
+    return KnowledgeNoteResponse(**data)  # type: ignore[arg-type]
 
 
 @router.get("")
@@ -68,7 +68,7 @@ async def list_notes(
 async def get_note(note_id: int) -> KnowledgeNoteResponse:
     if note_id not in _notes:
         raise HTTPException(404, "Note not found")
-    return KnowledgeNoteResponse(**_notes[note_id])
+    return KnowledgeNoteResponse(**_notes[note_id])  # type: ignore[arg-type]
 
 
 @router.put("/{note_id}", response_model=KnowledgeNoteResponse)
@@ -78,7 +78,7 @@ async def update_note(note_id: int, note: KnowledgeNoteCreate) -> KnowledgeNoteR
     _notes[note_id].update(
         content=note.content, note_type=note.note_type, tags=note.tags, is_public=note.is_public
     )
-    return KnowledgeNoteResponse(**_notes[note_id])
+    return KnowledgeNoteResponse(**_notes[note_id])  # type: ignore[arg-type]
 
 
 @router.delete("/{note_id}")

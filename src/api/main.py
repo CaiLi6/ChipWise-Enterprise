@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -66,8 +65,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings = load_settings()
         except Exception:
             settings = Settings(
-                llm=Settings.model_fields["llm"].default_factory(),  # type: ignore[union-attr]
-                embedding=Settings.model_fields["embedding"].default_factory(),  # type: ignore[union-attr]
+                llm=Settings.model_fields["llm"].default_factory(),  # type: ignore[union-attr, call-arg, misc]
+                embedding=Settings.model_fields["embedding"].default_factory(),  # type: ignore[union-attr, call-arg, misc]
             )
 
     app = FastAPI(
@@ -108,17 +107,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Exception handlers
     app.add_exception_handler(Exception, global_exception_handler)
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
 
     # Register routers
-    from src.api.routers.health import router as health_router
     from src.api.routers.auth import router as auth_router
-    from src.api.routers.sso import router as sso_router
-    from src.api.routers.documents import router as documents_router
-    from src.api.routers.tasks import router as tasks_router
     from src.api.routers.compare import router as compare_router
+    from src.api.routers.documents import router as documents_router
+    from src.api.routers.health import router as health_router
     from src.api.routers.knowledge import router as knowledge_router
     from src.api.routers.query import router as query_router
+    from src.api.routers.sso import router as sso_router
+    from src.api.routers.tasks import router as tasks_router
 
     app.include_router(health_router)
     app.include_router(auth_router)

@@ -63,9 +63,10 @@ class KeycloakProvider(BaseSSOProvider):
         )
 
     async def validate_id_token(self, id_token: str) -> dict[str, Any]:
-        import httpx
-        import json
         import base64
+        import json
+
+        import httpx
 
         jwks_uri = self._config["jwks_uri"]
 
@@ -96,4 +97,4 @@ class KeycloakProvider(BaseSSOProvider):
         if payload.get("iss") != self._config.get("issuer"):
             raise ValueError(f"Issuer mismatch: {payload.get('iss')}")
 
-        return payload
+        return payload  # type: ignore[no-any-return]

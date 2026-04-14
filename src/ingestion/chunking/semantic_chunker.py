@@ -19,12 +19,12 @@ _SENTENCE_RE = re.compile(r"(?<=[.!?。！？])\s+")
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    dot = sum(x * y for x, y in zip(a, b))
+    dot = sum(x * y for x, y in zip(a, b, strict=False))
     norm_a = sum(x * x for x in a) ** 0.5
     norm_b = sum(x * x for x in b) ** 0.5
     if norm_a == 0 or norm_b == 0:
         return 0.0
-    return dot / (norm_a * norm_b)
+    return float(dot / (norm_a * norm_b))
 
 
 class SemanticChunker(BaseChunker):
@@ -65,11 +65,14 @@ class SemanticChunker(BaseChunker):
     def _embed_sentences(self, sentences: list[str]) -> list[list[float]] | None:
         """Get sentence embeddings from BGE-M3 service."""
         try:
-            from src.libs.embedding.factory import create_embedding
+            from src.libs.embedding.factory import EmbeddingFactory
 
-            client = create_embedding()
-            results = client.embed(sentences)
-            return results
+            client = EmbeddingFactory.create({})
+            import asyncio
+            result = asyncio.get_event_loop().run_until_complete(
+                client.encode(sentences, return_sparse=False)
+            )
+            return result.dense if result.dense else None
         except Exception:
             logger.warning("Embedding service unavailable; semantic chunker falling back to size-based split")
             return None

@@ -42,7 +42,7 @@ class GraphSynchronizer:
                     return result
 
                 chip_data = dict(chip)
-                await self._graph.upsert_node("Chip", chip_data, key_field="chip_id")
+                self._graph.upsert_node("Chip", chip_data, key_field="chip_id")
                 result.nodes_created += 1
 
                 # Step 2: Parameters
@@ -51,12 +51,13 @@ class GraphSynchronizer:
                 )
                 for p in params:
                     p_data = dict(p)
-                    await self._graph.upsert_node("Parameter", p_data, key_field="param_id")
+                    self._graph.upsert_node("Parameter", p_data, key_field="param_id")
                     result.nodes_created += 1
-                    await self._graph.upsert_edge(
-                        "Chip", chip_data.get("chip_id"),
-                        "Parameter", p_data.get("param_id"),
-                        "HAS_PARAM", {},
+                    self._graph.upsert_edge(
+                        "HAS_PARAM",
+                        "Chip", str(chip_data.get("chip_id", "")),
+                        "Parameter", str(p_data.get("param_id", "")),
+                        {},
                     )
                     result.edges_created += 1
 
@@ -65,10 +66,11 @@ class GraphSynchronizer:
                     "SELECT * FROM chip_alternatives WHERE source_chip_id = $1", chip_id
                 )
                 for alt in alts:
-                    await self._graph.upsert_edge(
-                        "Chip", chip_id,
-                        "Chip", alt["target_chip_id"],
-                        "ALTERNATIVE", {"compatibility": alt.get("compatibility_level")},
+                    self._graph.upsert_edge(
+                        "ALTERNATIVE",
+                        "Chip", str(chip_id),
+                        "Chip", str(alt["target_chip_id"]),
+                        {"compatibility": alt.get("compatibility_level")},
                     )
                     result.edges_created += 1
 
@@ -78,11 +80,13 @@ class GraphSynchronizer:
                 )
                 for e in errata:
                     e_data = dict(e)
-                    await self._graph.upsert_node("Errata", e_data, key_field="errata_id")
+                    self._graph.upsert_node("Errata", e_data, key_field="errata_id")
                     result.nodes_created += 1
-                    await self._graph.upsert_edge(
-                        "Chip", chip_id, "Errata", e_data.get("errata_id"),
-                        "HAS_ERRATA", {},
+                    self._graph.upsert_edge(
+                        "HAS_ERRATA",
+                        "Chip", str(chip_id),
+                        "Errata", str(e_data.get("errata_id", "")),
+                        {},
                     )
                     result.edges_created += 1
 
@@ -92,11 +96,13 @@ class GraphSynchronizer:
                 )
                 for r in rules:
                     r_data = dict(r)
-                    await self._graph.upsert_node("DesignRule", r_data, key_field="rule_id")
+                    self._graph.upsert_node("DesignRule", r_data, key_field="rule_id")
                     result.nodes_created += 1
-                    await self._graph.upsert_edge(
-                        "Chip", chip_id, "DesignRule", r_data.get("rule_id"),
-                        "HAS_RULE", {},
+                    self._graph.upsert_edge(
+                        "HAS_RULE",
+                        "Chip", str(chip_id),
+                        "DesignRule", str(r_data.get("rule_id", "")),
+                        {},
                     )
                     result.edges_created += 1
 
@@ -109,11 +115,13 @@ class GraphSynchronizer:
                 )
                 for d in docs:
                     d_data = dict(d)
-                    await self._graph.upsert_node("Document", d_data, key_field="doc_id")
+                    self._graph.upsert_node("Document", d_data, key_field="doc_id")
                     result.nodes_created += 1
-                    await self._graph.upsert_edge(
-                        "Chip", chip_id, "Document", d_data.get("doc_id"),
-                        "DOCUMENTED_IN", {},
+                    self._graph.upsert_edge(
+                        "DOCUMENTED_IN",
+                        "Chip", str(chip_id),
+                        "Document", str(d_data.get("doc_id", "")),
+                        {},
                     )
                     result.edges_created += 1
 

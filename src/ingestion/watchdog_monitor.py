@@ -26,8 +26,8 @@ class DatasheetWatchdog:
     def start(self) -> None:
         """Start the watchdog observer."""
         try:
-            from watchdog.observers import Observer
-            from watchdog.events import FileSystemEventHandler, FileCreatedEvent
+            from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]  # noqa: F401
+            from watchdog.observers import Observer  # type: ignore[import-not-found]
 
             handler = _Handler(self)
             observer = Observer()
@@ -106,6 +106,5 @@ class _Handler:
             self._watchdog.on_file_created(event.src_path)
 
     def dispatch(self, event: Any) -> None:
-        if hasattr(event, "is_directory") and not event.is_directory:
-            if event.event_type == "created":
-                self.on_created(event)
+        if hasattr(event, "is_directory") and not event.is_directory and event.event_type == "created":
+            self.on_created(event)

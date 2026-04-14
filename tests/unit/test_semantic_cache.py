@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import numpy as np
-
+import pytest
 from src.cache.semantic_cache import (
-    SemanticCache,
-    CachedResponse,
     SIMILARITY_THRESHOLD,
+    SemanticCache,
     _cosine_similarity,
     _lsh_bucket_key,
 )
+from src.libs.embedding.base import EmbeddingResult
 
 
 def _make_vec(seed: float = 1.0, dim: int = 16) -> list[float]:
@@ -30,7 +28,7 @@ class TestSemanticCache:
     @pytest.fixture
     def embedding(self) -> AsyncMock:
         emb = AsyncMock()
-        emb.embed_query.return_value = _make_vec(1.0)
+        emb.encode.return_value = EmbeddingResult(dense=[_make_vec(1.0)])
         return emb
 
     @pytest.fixture
@@ -84,7 +82,7 @@ class TestSemanticCache:
     ) -> None:
         await cache.put("STM32F407 主频", {"answer": "168MHz"}, [])
         # Return a very different vector for the new query
-        embedding.embed_query.return_value = _make_vec(999.0)
+        embedding.encode.return_value = EmbeddingResult(dense=[_make_vec(999.0)])
         result = await cache.get("TI TPS65217 引脚")
         assert result is None
 

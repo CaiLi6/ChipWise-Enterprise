@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -61,10 +61,11 @@ class SemanticCache:
 
     async def get(
         self, query: str, trace: Any | None = None
-    ) -> Optional[CachedResponse]:
+    ) -> CachedResponse | None:
         """Look up a semantically similar cached response."""
         try:
-            vec = await self._embedding.embed_query(query)
+            result = await self._embedding.encode([query], return_sparse=False)
+            vec = result.dense[0] if result.dense else []
             bucket_key = _lsh_bucket_key(vec)
             redis_key = f"gptcache:bucket:{bucket_key}"
 
@@ -98,7 +99,8 @@ class SemanticCache:
     ) -> None:
         """Store a query-response pair in the cache."""
         try:
-            vec = await self._embedding.embed_query(query)
+            result = await self._embedding.encode([query], return_sparse=False)
+            vec = result.dense[0] if result.dense else []
             bucket_key = _lsh_bucket_key(vec)
             redis_key = f"gptcache:bucket:{bucket_key}"
 

@@ -10,6 +10,7 @@ import logging
 from typing import Any
 
 from src.core.types import ChunkRecord, RetrievalResult
+
 from .base import BaseVectorStore
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class MilvusStore(BaseVectorStore):
         self._connect()
 
     def _connect(self) -> None:
-        from pymilvus import connections
+        from pymilvus import connections  # type: ignore[import-untyped]
 
         try:
             connections.connect(alias="default", host=self._host, port=str(self._port))
@@ -48,14 +49,14 @@ class MilvusStore(BaseVectorStore):
             ) from exc
 
     def _get_collection(self, name: str) -> Any:
-        from pymilvus import Collection
+        from pymilvus import Collection  # type: ignore[import-untyped]
 
         col = Collection(name)
         col.load()
         return col
 
     async def upsert(self, records: list[ChunkRecord], collection: str = "datasheet_chunks") -> int:
-        from pymilvus import Collection
+        from pymilvus import Collection  # type: ignore[import-untyped]
 
         col = Collection(collection)
         data = []
@@ -104,7 +105,7 @@ class MilvusStore(BaseVectorStore):
         filters: dict[str, Any] | None = None,
         collection: str = "datasheet_chunks",
     ) -> list[RetrievalResult]:
-        from pymilvus import AnnSearchRequest, RRFRanker
+        from pymilvus import AnnSearchRequest, RRFRanker  # type: ignore[import-untyped]
 
         col = self._get_collection(collection)
 
@@ -135,7 +136,7 @@ class MilvusStore(BaseVectorStore):
         return self._parse_search_results(results)
 
     async def delete(self, ids: list[str], collection: str = "datasheet_chunks") -> int:
-        from pymilvus import Collection
+        from pymilvus import Collection  # type: ignore[import-untyped]
 
         col = Collection(collection)
         expr = f'chunk_id in {ids}'
@@ -143,17 +144,17 @@ class MilvusStore(BaseVectorStore):
         return result.delete_count if hasattr(result, "delete_count") else len(ids)
 
     async def get_by_ids(self, ids: list[str], collection: str = "datasheet_chunks") -> list[dict[str, Any]]:
-        from pymilvus import Collection
+        from pymilvus import Collection  # type: ignore[import-untyped]
 
         col = Collection(collection)
         col.load()
         expr = f'chunk_id in {ids}'
         results = col.query(expr=expr, output_fields=["chunk_id", "doc_id", "content"])
-        return results
+        return results  # type: ignore[no-any-return]
 
     async def health_check(self) -> bool:
         try:
-            from pymilvus import connections
+            from pymilvus import connections  # type: ignore[import-untyped]
 
             connections.connect(alias="default", host=self._host, port=str(self._port))
             return True
@@ -161,7 +162,7 @@ class MilvusStore(BaseVectorStore):
             return False
 
     async def close(self) -> None:
-        from pymilvus import connections
+        from pymilvus import connections  # type: ignore[import-untyped]
 
         try:
             connections.disconnect("default")

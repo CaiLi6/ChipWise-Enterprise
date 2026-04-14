@@ -56,6 +56,7 @@ class RateLimiter:
 
     async def _check_redis(self, user_id: str) -> tuple[bool, int]:
         """Redis-backed rate limit check using INCR + EXPIRE."""
+        assert self.redis is not None
         now = int(time.time())
 
         # Level 1: per-minute
@@ -149,6 +150,7 @@ class RateLimiter:
         slot_ttl: int,
     ) -> bool:
         """Redis SADD-based semaphore with TTL auto-cleanup."""
+        assert self.redis is not None
         start = time.monotonic()
         while time.monotonic() - start < timeout:
             current = await self.redis.scard(sem_key)

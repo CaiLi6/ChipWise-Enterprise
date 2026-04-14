@@ -7,8 +7,8 @@ import logging
 import re
 from typing import Any
 
-from src.libs.llm.base import BaseLLM
 from src.core.types import Chunk
+from src.libs.llm.base import BaseLLM
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,8 @@ async def extract_design_rules(
             raw = await llm.generate(prompt, temperature=0, max_tokens=500)
 
             # Parse JSON
-            code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
-            text = code_block.group(1) if code_block else raw
+            code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", str(raw), re.DOTALL)
+            text = code_block.group(1) if code_block else str(raw)
             try:
                 parsed = json.loads(text.strip())
                 if isinstance(parsed, list):

@@ -65,4 +65,4 @@ class SSOStateStore:
 
         if raw is None:
             return None
-        return json.loads(raw)
+        return json.loads(raw)  # type: ignore[no-any-return]

@@ -95,9 +95,9 @@ class ChipCompareTool(BaseTool):
             try:
                 table_str = self._format_table(comparison_table, chip_names)
                 prompt = self._prompt.format(table=table_str)
-                analysis_text = await self._llm.generate(
+                analysis_text = str(await self._llm.generate(
                     prompt, temperature=0.3, max_tokens=500
-                )
+                ))
             except Exception:
                 logger.warning("LLM comparison analysis failed", exc_info=True)
 
@@ -161,7 +161,10 @@ class ChipCompareTool(BaseTool):
                 if not chip:
                     return None
 
-                query = "SELECT name, category, typ_value, min_value, max_value, unit FROM chip_parameters WHERE chip_id = $1"
+                query = (
+                    "SELECT name, category, typ_value, min_value, max_value, unit"
+                    " FROM chip_parameters WHERE chip_id = $1"
+                )
                 args: list[Any] = [chip["chip_id"]]
 
                 if dimensions:

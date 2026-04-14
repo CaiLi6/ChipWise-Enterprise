@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import random
-import time
 from pathlib import Path
 from typing import Any
 
@@ -51,7 +50,7 @@ class DatasheetCrawler:
             return []
 
         try:
-            from playwright.async_api import async_playwright
+            from playwright.async_api import async_playwright  # type: ignore[import-not-found]
         except ImportError:
             logger.error("Playwright not installed")
             return []

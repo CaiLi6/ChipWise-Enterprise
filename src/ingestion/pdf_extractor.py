@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ class PDFTableExtractor:
         """Tier 2: Camelot lattice + stream modes."""
         tables: list[ExtractedTable] = []
         try:
-            import camelot
+            import camelot  # type: ignore[import-not-found]
         except ImportError:
             logger.debug("Camelot not installed, skipping Tier 2")
             return tables
@@ -140,22 +140,23 @@ class PDFTableExtractor:
         """Tier 3: PaddleOCR PP-Structure (lazy-loaded)."""
         try:
             if self._paddleocr_engine is None:
-                from paddleocr import PPStructure
+                from paddleocr import PPStructure  # type: ignore[import-not-found]
                 self._paddleocr_engine = PPStructure(show_log=False)
 
-            import fitz  # PyMuPDF
+            import fitz  # type: ignore[import-not-found]  # PyMuPDF
             doc = fitz.open(pdf_path)
             page = doc[page_num - 1]
             pix = page.get_pixmap(dpi=200)
             img_bytes = pix.tobytes("png")
             doc.close()
 
+            import io
+
             import numpy as np
             from PIL import Image
-            import io
             img = np.array(Image.open(io.BytesIO(img_bytes)))
 
-            result = self._paddleocr_engine(img)
+            result = self._paddleocr_engine(img)  # type: ignore[misc]
             tables: list[ExtractedTable] = []
             for item in result:
                 if item.get("type") == "table":

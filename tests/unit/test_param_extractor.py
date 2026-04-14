@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+from src.agent.safety.output_validator import ValidationResult
 from src.ingestion.param_extractor import ParamExtractor
 from src.libs.llm.base import LLMResponse
 
@@ -90,7 +91,7 @@ class TestParamExtractor:
             {"name": "Freq", "category": "timing", "unit": "MHz", "typ_value": "168"}
         ]))
         validator = MagicMock()
-        validator.validate_chip_param.return_value = {"valid": True, "warnings": []}
+        validator.validate_chip_params.return_value = ValidationResult(valid=True, errors=[], warnings=[])
         extractor = ParamExtractor(llm, validator=validator)
         result = await extractor.extract_from_table([["A"]], "STM32", 1)
         assert len(result) == 1
@@ -103,9 +104,9 @@ class TestParamExtractor:
             {"name": "Freq", "category": "timing", "unit": "MHz", "typ_value": "-50"}
         ]))
         validator = MagicMock()
-        validator.validate_chip_param.return_value = {
-            "valid": True, "warnings": ["Negative frequency"]
-        }
+        validator.validate_chip_params.return_value = ValidationResult(
+            valid=True, errors=[], warnings=[MagicMock()]
+        )
         extractor = ParamExtractor(llm, validator=validator)
         result = await extractor.extract_from_table([["A"]], "STM32", 1)
         assert result[0]["needs_review"] is True

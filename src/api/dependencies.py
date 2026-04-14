@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
-from functools import lru_cache
-from typing import Any, AsyncGenerator
+from typing import Any
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI
 
 from src.core.settings import Settings, load_settings
 
@@ -46,7 +45,7 @@ async def _create_db_pool(settings: Settings) -> Any:
     """Create an asyncpg connection pool. Returns None on failure."""
     global _db_pool
     try:
-        import asyncpg
+        import asyncpg  # type: ignore[import-not-found]
 
         db = settings.database
         _db_pool = await asyncpg.create_pool(
@@ -67,7 +66,7 @@ async def _create_db_pool(settings: Settings) -> Any:
         return None
 
 
-async def get_db_pool(settings: Settings = Depends(get_settings)) -> Any:
+async def get_db_pool(settings: Settings = Depends(get_settings)) -> Any:  # noqa: B008
     """FastAPI Depends: return the asyncpg pool (may be None if unavailable)."""
     global _db_pool
     if _db_pool is None:
@@ -105,7 +104,7 @@ async def _create_redis(settings: Settings) -> Any:
         return None
 
 
-async def get_redis(settings: Settings = Depends(get_settings)) -> Any:
+async def get_redis(settings: Settings = Depends(get_settings)) -> Any:  # noqa: B008
     """FastAPI Depends: return the async Redis client (may be None)."""
     global _redis_client
     if _redis_client is None:
@@ -134,7 +133,7 @@ class EmbeddingClient:
                 json={"texts": texts, "return_sparse": return_sparse},
             )
             resp.raise_for_status()
-            return resp.json()
+            return resp.json()  # type: ignore[no-any-return]
 
     async def health(self) -> bool:
         import httpx
@@ -142,7 +141,7 @@ class EmbeddingClient:
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.get(f"{self.base_url}/health")
-                return resp.status_code == 200 and resp.json().get("ready", False)
+                return resp.status_code == 200 and resp.json().get("ready", False)  # type: ignore[no-any-return]
         except Exception:
             return False
 
@@ -165,7 +164,7 @@ class RerankerClient:
                 json={"query": query, "documents": documents, "top_k": top_k},
             )
             resp.raise_for_status()
-            return resp.json()
+            return resp.json()  # type: ignore[no-any-return]
 
     async def health(self) -> bool:
         import httpx
@@ -173,12 +172,12 @@ class RerankerClient:
         try:
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.get(f"{self.base_url}/health")
-                return resp.status_code == 200 and resp.json().get("ready", False)
+                return resp.status_code == 200 and resp.json().get("ready", False)  # type: ignore[no-any-return]
         except Exception:
             return False
 
 
-def get_embedding_client(settings: Settings = Depends(get_settings)) -> EmbeddingClient:
+def get_embedding_client(settings: Settings = Depends(get_settings)) -> EmbeddingClient:  # noqa: B008
     """FastAPI Depends: return an EmbeddingClient."""
     return EmbeddingClient(
         base_url=settings.embedding.base_url,
@@ -186,7 +185,7 @@ def get_embedding_client(settings: Settings = Depends(get_settings)) -> Embeddin
     )
 
 
-def get_reranker_client(settings: Settings = Depends(get_settings)) -> RerankerClient:
+def get_reranker_client(settings: Settings = Depends(get_settings)) -> RerankerClient:  # noqa: B008
     """FastAPI Depends: return a RerankerClient (or None if disabled)."""
     return RerankerClient(
         base_url=settings.rerank.base_url,
@@ -198,7 +197,7 @@ def get_reranker_client(settings: Settings = Depends(get_settings)) -> RerankerC
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     """Application lifespan: create pools on startup, close on shutdown."""
     settings = get_settings()
     app.state.settings = settings

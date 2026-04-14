@@ -29,8 +29,8 @@ async def parse_errata_document(
 
     try:
         raw = await llm.generate(prompt, temperature=0, max_tokens=2000)
-        code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
-        output = code_block.group(1) if code_block else raw
+        code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", str(raw), re.DOTALL)
+        output = code_block.group(1) if code_block else str(raw)
 
         try:
             entries = json.loads(output.strip())

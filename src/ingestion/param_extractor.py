@@ -6,10 +6,10 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from src.libs.llm.base import BaseLLM
 from src.agent.safety.output_validator import StructuredOutputValidator
+from src.libs.llm.base import BaseLLM
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +72,13 @@ class ParamExtractor:
             if self._validator and params:
                 validated = []
                 for p in params:
-                    result = self._validator.validate_chip_param(p)
-                    if result.get("valid"):
-                        p["needs_review"] = bool(result.get("warnings"))
+                    result = self._validator.validate_chip_params(p)
+                    if result.valid:
+                        p["needs_review"] = bool(result.warnings)
                     else:
                         logger.warning(
                             "Param validation failed: %s — %s",
-                            p.get("name"), result.get("errors"),
+                            p.get("name"), result.errors,
                         )
                         p["needs_review"] = True
                     validated.append(p)
@@ -112,7 +112,7 @@ class ParamExtractor:
             if isinstance(data, list):
                 return data
             if isinstance(data, dict) and "parameters" in data:
-                return data["parameters"]
+                return data["parameters"]  # type: ignore[no-any-return]
             return [data]
         except json.JSONDecodeError:
             pass
@@ -121,7 +121,7 @@ class ParamExtractor:
         arr_match = re.search(r"\[.*\]", output, re.DOTALL)
         if arr_match:
             try:
-                return json.loads(arr_match.group(0))
+                return json.loads(arr_match.group(0))  # type: ignore[no-any-return]
             except json.JSONDecodeError:
                 pass
 

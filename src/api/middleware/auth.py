@@ -7,15 +7,15 @@ from __future__ import annotations
 
 import logging
 import time
-from functools import wraps
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jose import JWTError, jwt  # type: ignore[import-untyped]
 
 from src.api.schemas.auth import UserInfo
-from src.core.settings import AuthSettings, Settings
+from src.core.settings import AuthSettings
 
 logger = logging.getLogger("chipwise.auth")
 
@@ -49,7 +49,7 @@ def create_access_token(
         "type": "access",
     }
     key, algorithm = _get_signing_key(settings)
-    return jwt.encode(claims, key, algorithm=algorithm)
+    return jwt.encode(claims, key, algorithm=algorithm)  # type: ignore[no-any-return]
 
 
 def create_refresh_token(
@@ -68,7 +68,7 @@ def create_refresh_token(
         "type": "refresh",
     }
     key, algorithm = _get_signing_key(settings)
-    return jwt.encode(claims, key, algorithm=algorithm)
+    return jwt.encode(claims, key, algorithm=algorithm)  # type: ignore[no-any-return]
 
 
 # ── Token verification ──────────────────────────────────────────────
@@ -92,13 +92,13 @@ def verify_jwt_token(token: str, settings: AuthSettings) -> dict[str, Any]:
             issuer=JWT_ISSUER,
             audience=JWT_AUDIENCE,
         )
-        return claims
+        return claims  # type: ignore[no-any-return]
     except JWTError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {exc}",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
 
 
 # ── FastAPI Depends ─────────────────────────────────────────────────
@@ -148,7 +148,7 @@ def require_role(*roles: str) -> Callable:
     """
 
     async def role_checker(
-        current_user: UserInfo = Depends(get_current_user),
+        current_user: UserInfo = Depends(get_current_user),  # noqa: B008
     ) -> UserInfo:
         if current_user.role not in roles:
             raise HTTPException(

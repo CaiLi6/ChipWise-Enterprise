@@ -80,7 +80,7 @@ class TestCaseGenTool(BaseTool):
 
         try:
             raw = await self._llm.generate(prompt, temperature=0.3, max_tokens=4096)
-            cases = self._parse_test_cases(raw)
+            cases = self._parse_test_cases(str(raw))
             return {
                 "test_cases": raw,
                 "structured_cases": cases,

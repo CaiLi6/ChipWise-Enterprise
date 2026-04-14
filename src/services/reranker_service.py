@@ -54,7 +54,7 @@ def load_model(model_name: str = MODEL_NAME) -> Any:
     """Load bce-reranker via sentence-transformers CrossEncoder. Called at startup."""
     global _model, _model_ready
     try:
-        from sentence_transformers import CrossEncoder
+        from sentence_transformers import CrossEncoder  # type: ignore[import-not-found]
 
         logger.info("Loading model %s ...", model_name)
         _model = CrossEncoder(model_name)
@@ -71,7 +71,7 @@ def load_model(model_name: str = MODEL_NAME) -> Any:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     """Load model on startup; cleanup on shutdown."""
     try:
         load_model()

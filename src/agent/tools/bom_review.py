@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import re
-from pathlib import Path
 from typing import Any
 
 from src.agent.tools.base_tool import BaseTool
@@ -137,7 +136,7 @@ class BOMReviewTool(BaseTool):
         """Parse BOM from Excel file using openpyxl."""
         items: list[BOMItem] = []
         try:
-            import openpyxl
+            import openpyxl  # type: ignore[import-untyped]
             wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
             ws = wb.active
             if ws is None:
@@ -193,7 +192,7 @@ class BOMReviewTool(BaseTool):
                 if row:
                     item.chip_id = row["chip_id"]
                     item.match_status = "matched"
-                    item._status = row["status"]
+                    item._status = row["status"]  # type: ignore[attr-defined]
                     return
 
                 # Prefix/fuzzy match
@@ -204,7 +203,7 @@ class BOMReviewTool(BaseTool):
                 if row:
                     item.chip_id = row["chip_id"]
                     item.match_status = "ambiguous"
-                    item._status = row["status"]
+                    item._status = row["status"]  # type: ignore[attr-defined]
         except Exception:
             logger.debug("Chip match failed for %s", item.part_number)
 
@@ -273,7 +272,7 @@ class BOMReviewTool(BaseTool):
             try:
                 alts = await self._graph.find_alternatives(str(chip_id))
                 if alts:
-                    return alts[0]
+                    return alts[0]  # type: ignore[no-any-return]
             except Exception:
                 pass
 

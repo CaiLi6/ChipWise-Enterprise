@@ -53,6 +53,7 @@ def create_chunker(strategy: str | None = None, **kwargs: Any) -> BaseChunker:
     if strategy is None:
         strategy = getattr(chunking_cfg, "strategy", "datasheet") if chunking_cfg else "datasheet"
 
+    assert strategy is not None
     registry = _ensure_registry()
     cls = registry.get(strategy)
     if cls is None:

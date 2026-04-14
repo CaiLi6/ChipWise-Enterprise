@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Try to import prometheus_client; degrade gracefully if not available
 try:
-    from prometheus_client import Counter, REGISTRY
+    from prometheus_client import Counter  # type: ignore[import-not-found]
     _token_counter = Counter(
         "chipwise_llm_tokens_total",
         "Total LLM token usage",

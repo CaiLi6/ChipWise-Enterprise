@@ -54,35 +54,35 @@ class MultiSourceFusion:
                 )
 
         # SQL results
-        for r in (sql_results or []):
-            key = r.get("chunk_id", r.get("content", "")[:100])
-            score = float(r.get("score", 0.5)) * self._weights["sql"]
+        for sr in (sql_results or []):
+            key = sr.get("chunk_id", sr.get("content", "")[:100])
+            score = float(sr.get("score", 0.5)) * self._weights["sql"]
             if key not in seen or score > seen[key].score:
                 seen[key] = FusedResult(
-                    content=r.get("content", ""),
+                    content=sr.get("content", ""),
                     source="sql",
                     score=score,
-                    chunk_id=r.get("chunk_id", ""),
-                    doc_id=r.get("doc_id", ""),
-                    metadata=r,
+                    chunk_id=sr.get("chunk_id", ""),
+                    doc_id=sr.get("doc_id", ""),
+                    metadata=sr,
                 )
 
         # Graph results — also used for boosting
         graph_part_numbers: set[str] = set()
-        for r in (graph_results or []):
-            pn = r.get("part_number", "")
+        for gr in (graph_results or []):
+            pn = gr.get("part_number", "")
             if pn:
                 graph_part_numbers.add(pn)
-            key = r.get("chunk_id", r.get("part_number", str(r)[:100]))
-            score = float(r.get("score", 0.5)) * self._weights["graph"]
+            key = gr.get("chunk_id", gr.get("part_number", str(gr)[:100]))
+            score = float(gr.get("score", 0.5)) * self._weights["graph"]
             if key not in seen or score > seen[key].score:
                 seen[key] = FusedResult(
-                    content=r.get("content", str(r)),
+                    content=gr.get("content", str(gr)),
                     source="graph",
                     score=score,
-                    chunk_id=r.get("chunk_id", ""),
-                    doc_id=r.get("doc_id", ""),
-                    metadata=r,
+                    chunk_id=gr.get("chunk_id", ""),
+                    doc_id=gr.get("doc_id", ""),
+                    metadata=gr,
                 )
 
         # Graph boost: if a result's part_number appears in graph_results, boost score

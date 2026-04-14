@@ -52,11 +52,11 @@ class DesignRuleCheckTool(BaseTool):
         errata = await self._get_errata(chip_name)
 
         # Step 3: Graph query for errata→peripheral
-        errata_peripherals: list[dict[str, Any]] = []
+        _errata_peripherals: list[dict[str, Any]] = []
         if self._graph and errata:
             try:
                 result = await self._graph.find_errata_by_peripheral(chip_name, "")
-                errata_peripherals = result
+                _errata_peripherals = result
             except Exception:
                 pass
 
@@ -85,7 +85,7 @@ class DesignRuleCheckTool(BaseTool):
                     f"App notes ({len(app_notes)}): {[n['content'][:100] for n in app_notes[:3]]}\n\n"
                     "Summarize the key design considerations, sorted by severity."
                 )
-                analysis = await self._llm.generate(prompt, temperature=0.3, max_tokens=500)
+                analysis = str(await self._llm.generate(prompt, temperature=0.3, max_tokens=500))
             except Exception:
                 logger.warning("LLM analysis failed", exc_info=True)
 

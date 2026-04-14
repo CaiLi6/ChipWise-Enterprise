@@ -8,12 +8,11 @@ Loads BAAI/bge-m3 at startup and exposes:
 from __future__ import annotations
 
 import logging
-import time
 from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger("embedding_service")
 
@@ -51,7 +50,7 @@ def load_model(model_name: str = MODEL_NAME) -> Any:
     """Load BGE-M3 via FlagEmbedding. Called at startup."""
     global _model, _model_ready
     try:
-        from FlagEmbedding import BGEM3FlagModel
+        from FlagEmbedding import BGEM3FlagModel  # type: ignore[import-not-found]
 
         logger.info("Loading model %s ...", model_name)
         _model = BGEM3FlagModel(model_name, use_fp16=True)
@@ -68,7 +67,7 @@ def load_model(model_name: str = MODEL_NAME) -> Any:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     """Load model on startup; cleanup on shutdown."""
     try:
         load_model()

@@ -32,16 +32,17 @@ class KuzuGraphStore(BaseGraphStore):
     # ------------------------------------------------------------------
 
     def execute_cypher(self, query: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        result = self._conn.execute(query, parameters or {})
+        raw_result = self._conn.execute(query, parameters or {})
+        assert not isinstance(raw_result, list), "Expected single QueryResult"
         rows: list[dict[str, Any]] = []
-        columns = result.get_column_names()
-        while result.has_next():
-            values = result.get_next()
-            rows.append(dict(zip(columns, values)))
+        columns = raw_result.get_column_names()
+        while raw_result.has_next():
+            values = raw_result.get_next()
+            rows.append(dict(zip(columns, values, strict=False)))
         return rows
 
     def upsert_node(self, label: str, properties: dict[str, Any], key_field: str = "id") -> None:
-        key_value = properties[key_field]
+        _key_value = properties[key_field]
         set_parts = [f"n.{k} = ${k}" for k in properties if k != key_field]
         set_clause = f" SET {', '.join(set_parts)}" if set_parts else ""
         cypher = f"MERGE (n:{label} {{{key_field}: ${key_field}}}){set_clause}"

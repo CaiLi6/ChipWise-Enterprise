@@ -135,7 +135,7 @@ def _check_redis(settings: Any) -> ServiceStatusDetail:
 
 def _check_milvus(settings: Any) -> ServiceStatusDetail:
     try:
-        from pymilvus import connections, utility
+        from pymilvus import connections, utility  # type: ignore[import-untyped]
 
         ms = settings.vector_store.milvus
         connections.connect(alias="readiness", host=ms.host, port=ms.port, timeout=3)

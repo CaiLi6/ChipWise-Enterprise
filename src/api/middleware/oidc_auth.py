@@ -46,7 +46,7 @@ class OIDCAuthMiddleware:
             jwks = jwks_resp.json()
 
         _JWKS_CACHE[discovery_url] = (jwks, time.time())
-        return jwks
+        return jwks  # type: ignore[no-any-return]
 
     async def verify_token(self, token: str) -> dict[str, Any]:
         """Verify JWT signature and standard claims.
@@ -60,7 +60,7 @@ class OIDCAuthMiddleware:
 
         # Decode header to get key ID
         header_b64 = parts[0] + "=="
-        header = json.loads(base64.urlsafe_b64decode(header_b64))
+        _header = json.loads(base64.urlsafe_b64decode(header_b64))
 
         # Decode payload
         payload_b64 = parts[1] + "=="
@@ -90,4 +90,4 @@ class OIDCAuthMiddleware:
         except Exception:
             logger.warning("JWKS fetch failed; skipping signature verification")
 
-        return payload
+        return payload  # type: ignore[no-any-return]

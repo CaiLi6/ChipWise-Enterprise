@@ -23,8 +23,8 @@ class ReportEngine:
     ) -> str:
         """Export test cases to Excel file."""
         try:
-            import openpyxl
-            from openpyxl.styles import Font
+            import openpyxl  # type: ignore[import-untyped]
+            from openpyxl.styles import Font  # type: ignore[import-untyped]
         except ImportError:
             logger.error("openpyxl not installed")
             return ""
@@ -82,7 +82,7 @@ class ReportEngine:
     ) -> str:
         """Generate a Word report."""
         try:
-            from docx import Document
+            from docx import Document  # type: ignore[import-not-found]
         except ImportError:
             logger.error("python-docx not installed")
             return ""
@@ -106,7 +106,8 @@ class ReportEngine:
                     table.cell(row_idx, 0).text = param
                     for col_idx, chip in enumerate(chips):
                         v = values.get(chip, {})
-                        table.cell(row_idx, col_idx + 1).text = str(v.get("typ", "N/A")) if isinstance(v, dict) else str(v or "N/A")
+                        cell_text = str(v.get("typ", "N/A")) if isinstance(v, dict) else str(v or "N/A")
+                        table.cell(row_idx, col_idx + 1).text = cell_text
 
         if "analysis" in data:
             doc.add_heading("Analysis", level=1)
@@ -123,9 +124,9 @@ class ReportEngine:
     ) -> str:
         """Generate a PDF report (using reportlab)."""
         try:
-            from reportlab.lib.pagesizes import A4
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-            from reportlab.lib.styles import getSampleStyleSheet
+            from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
+            from reportlab.lib.styles import getSampleStyleSheet  # type: ignore[import-untyped]
+            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer  # type: ignore[import-untyped]
         except ImportError:
             logger.error("reportlab not installed")
             return ""
@@ -157,8 +158,8 @@ class ReportEngine:
     ) -> str:
         """Generate an Excel report with data tables."""
         try:
-            import openpyxl
-            from openpyxl.styles import Font
+            import openpyxl  # type: ignore[import-untyped]
+            from openpyxl.styles import Font  # type: ignore[import-untyped]
         except ImportError:
             return ""
 
@@ -174,7 +175,8 @@ class ReportEngine:
                 for col, (chip, val) in enumerate(values.items(), 2):
                     if row == 3:
                         ws.cell(row=2, column=col, value=chip).font = Font(bold=True)
-                    ws.cell(row=row, column=col, value=str(val.get("typ", "")) if isinstance(val, dict) else str(val or ""))
+                    cell_val = str(val.get("typ", "")) if isinstance(val, dict) else str(val or "")
+                    ws.cell(row=row, column=col, value=cell_val)
                 row += 1
 
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")

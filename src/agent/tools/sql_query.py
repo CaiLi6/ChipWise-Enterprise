@@ -29,7 +29,7 @@ class SQLQueryTool(BaseTool):
         db_pool: Any = None,
     ) -> None:
         if sql_search is not None:
-            self._search = sql_search
+            self._search: SQLSearch | None = sql_search
         elif db_pool is not None:
             self._search = SQLSearch(db_pool)
         else:
