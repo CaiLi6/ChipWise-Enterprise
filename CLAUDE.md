@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > `.github/copilot-instructions.md` mirrors this file — keep both in sync when updating.
 
+> **First-time deployment (极摩客 or any fresh machine)**: After `git clone`, read `docs/DEPLOYMENT_CHECKLIST.md` and walk the user through Phase 0-12. This is the first time the full stack meets real LM Studio — treat Phase 8+ test failures as expected and help diagnose rather than skip.
+
 ## Project Overview
 
 **ChipWise Enterprise** — a chip data intelligence retrieval and analysis platform for semiconductor hardware teams. Uses **Agentic RAG** (ReAct Agent + Tool Calling) and **Graph RAG** (Kùzu knowledge graph) for natural-language chip queries, comparisons, BOM review, and test case generation. All inference runs locally on a single AMD Ryzen AI 395 machine (128 GB RAM) via LM Studio — zero data exfiltration.

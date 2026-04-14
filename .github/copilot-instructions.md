@@ -2,6 +2,8 @@
 
 > **同步说明**: 本文件与项目根目录 `CLAUDE.md` 内容保持同步。修改时请同步更新两份文件。最近同步版本: ENTERPRISE_DEV_SPEC v5.5 (2026-04-14)。
 
+> **First-time deployment (极摩客 or any fresh machine)**: After `git clone`, read `docs/DEPLOYMENT_CHECKLIST.md` and walk the user through Phase 0-12. This is the first time the full stack meets real LM Studio — treat Phase 8+ test failures as expected and help diagnose rather than skip.
+
 **ChipWise Enterprise** is a chip data intelligence retrieval and analysis platform for semiconductor hardware teams. It uses **Agentic RAG** (ReAct Agent + Tool Calling) and **Graph RAG** (Kùzu knowledge graph) to provide natural-language chip parameter queries, comparisons, BOM review, and test case generation. All compute runs locally on a single AMD Ryzen AI 395 machine (128 GB RAM, LM Studio for multi-model inference).
 
 All 11 development phases are complete. Architecture spec: `docs/ENTERPRISE_DEV_SPEC.md` (v5.5). Task breakdown: `docs/DEVELOPMENT_PLAN.md` (113 tasks).
