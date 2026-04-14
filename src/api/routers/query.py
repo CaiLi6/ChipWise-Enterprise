@@ -31,6 +31,9 @@ def _get_or_create_orchestrator() -> Any:
 
     Returns None when the LLM or tool dependencies are unavailable so that
     callers can degrade gracefully rather than crash.
+
+    When LM Studio recovers after being down, resets the singleton so the
+    orchestrator can be rebuilt on the next request.
     """
     global _orchestrator, _orchestrator_initialized
     if _orchestrator_initialized:
@@ -124,6 +127,22 @@ async def query(
     """
     trace_id = getattr(request.state, "trace_id", "")
 
+    # Fast-fail: check LM Studio health before entering orchestrator
+    lm_status = getattr(request.app.state, "lmstudio_status", None)
+    if lm_status:
+        primary = lm_status.get("lmstudio_primary", {})
+        if not primary.get("healthy", True):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="LLM service temporarily unavailable",
+                headers={"Retry-After": "30"},
+            )
+        # Auto-heal: if LM Studio recovered but orchestrator is still None, rebuild
+        if primary.get("healthy") and orchestrator is None:
+            global _orchestrator_initialized
+            _orchestrator_initialized = False
+            orchestrator = _get_or_create_orchestrator()
+
     if orchestrator is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -172,6 +191,18 @@ async def stream_query(
     trace_id = getattr(request.state, "trace_id", "")
 
     async def _generate() -> AsyncGenerator[str, None]:
+        # Fast-fail: check LM Studio health
+        lm_status = getattr(request.app.state, "lmstudio_status", None)
+        if lm_status:
+            primary = lm_status.get("lmstudio_primary", {})
+            if not primary.get("healthy", True):
+                err = json.dumps({
+                    "type": "error",
+                    "content": "LLM service temporarily unavailable",
+                })
+                yield f"data: {err}\n\n"
+                return
+
         if orchestrator is None:
             err = json.dumps({
                 "type": "error",

@@ -49,11 +49,12 @@ class TestHealthEndpoint:
 
 @pytest.mark.unit
 class TestReadinessEndpoint:
+    @patch("src.api.routers.health._check_lmstudio")
     @patch("src.api.routers.health._check_http_service")
     @patch("src.api.routers.health._check_milvus")
     @patch("src.api.routers.health._check_redis")
     @patch("src.api.routers.health._check_postgres")
-    def test_all_healthy(self, mock_pg, mock_redis, mock_milvus, mock_http, client) -> None:
+    def test_all_healthy(self, mock_pg, mock_redis, mock_milvus, mock_http, mock_lm, client) -> None:
         from src.api.routers.health import ServiceStatusDetail
 
         healthy = ServiceStatusDetail(healthy=True, message="OK")
@@ -61,6 +62,7 @@ class TestReadinessEndpoint:
         mock_redis.return_value = healthy
         mock_milvus.return_value = healthy
         mock_http.return_value = healthy
+        mock_lm.return_value = healthy
 
         resp = client.get("/readiness")
         assert resp.status_code == 200
@@ -68,12 +70,13 @@ class TestReadinessEndpoint:
         assert data["status"] == "ready"
         assert all(s["healthy"] for s in data["services"].values())
 
+    @patch("src.api.routers.health._check_lmstudio")
     @patch("src.api.routers.health._check_http_service")
     @patch("src.api.routers.health._check_milvus")
     @patch("src.api.routers.health._check_redis")
     @patch("src.api.routers.health._check_postgres")
     def test_degraded_when_service_down(
-        self, mock_pg, mock_redis, mock_milvus, mock_http, client
+        self, mock_pg, mock_redis, mock_milvus, mock_http, mock_lm, client
     ) -> None:
         from src.api.routers.health import ServiceStatusDetail
 
@@ -83,6 +86,7 @@ class TestReadinessEndpoint:
         mock_redis.return_value = healthy
         mock_milvus.return_value = healthy
         mock_http.return_value = healthy
+        mock_lm.return_value = healthy
 
         resp = client.get("/readiness")
         assert resp.status_code == 200
@@ -97,6 +101,7 @@ class TestReadinessEndpoint:
             patch("src.api.routers.health._check_redis") as mr,
             patch("src.api.routers.health._check_milvus") as mm,
             patch("src.api.routers.health._check_http_service") as mh,
+            patch("src.api.routers.health._check_lmstudio") as ml,
         ):
             from src.api.routers.health import ServiceStatusDetail
 
@@ -105,12 +110,15 @@ class TestReadinessEndpoint:
             mr.return_value = ok
             mm.return_value = ok
             mh.return_value = ok
+            ml.return_value = ok
 
             data = client.get("/readiness").json()
             assert "postgres" in data["services"]
             assert "redis" in data["services"]
             assert "milvus" in data["services"]
             assert "embedding" in data["services"]
+            assert "lmstudio_primary" in data["services"]
+            assert "lmstudio_router" in data["services"]
 
 
 # ── CORS ────────────────────────────────────────────────────────────

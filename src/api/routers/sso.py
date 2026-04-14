@@ -4,23 +4,18 @@ from __future__ import annotations
 
 import logging
 import secrets
-import time
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 
-from src.api.dependencies import get_settings
+from src.api.dependencies import get_db_pool, get_redis, get_settings
 from src.auth.sso.jit_provisioning import JITProvisioner
+from src.api.routers._sso_state import SSOStateStore
 
 logger = logging.getLogger("chipwise.sso")
 
 router = APIRouter(prefix="/api/v1/auth/sso", tags=["sso"])
-
-# In-memory CSRF state store: state_token -> {nonce, provider, expires_at}
-# In production this should be Redis with TTL.
-_STATE_STORE: dict[str, dict[str, Any]] = {}
-_STATE_TTL = 600  # 10 minutes
 
 
 def _build_provider(provider_name: str, settings: Any) -> Any:
@@ -69,7 +64,10 @@ def _build_provider(provider_name: str, settings: Any) -> Any:
 
 
 @router.get("/login")
-async def sso_login(provider: str = "keycloak") -> RedirectResponse:
+async def sso_login(
+    provider: str = "keycloak",
+    redis: Any = Depends(get_redis),
+) -> RedirectResponse:
     """Initiate SSO login: redirect the user's browser to the identity provider.
 
     Query params:
@@ -89,13 +87,10 @@ async def sso_login(provider: str = "keycloak") -> RedirectResponse:
             ),
         )
 
+    store = SSOStateStore(redis)
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
-    _STATE_STORE[state] = {
-        "nonce": nonce,
-        "provider": provider,
-        "expires_at": time.time() + _STATE_TTL,
-    }
+    await store.put(state, {"nonce": nonce, "provider": provider})
 
     sso_provider = _build_provider(provider, settings)
     authorization_url = sso_provider.get_authorization_url(state=state, nonce=nonce)
@@ -108,6 +103,8 @@ async def sso_callback(
     code: str,
     state: str,
     request: Request,
+    redis: Any = Depends(get_redis),
+    db_pool: Any = Depends(get_db_pool),
 ) -> dict[str, Any]:
     """Handle IdP authorization callback.
 
@@ -121,17 +118,13 @@ async def sso_callback(
     Returns:
         JSON with access_token, refresh_token, token_type, expires_in, user.
     """
-    # --- CSRF state validation ---
-    stored = _STATE_STORE.pop(state, None)
+    # --- CSRF state validation (Redis-backed, atomic pop) ---
+    store = SSOStateStore(redis)
+    stored = await store.pop(state)
     if stored is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid or expired state parameter — possible CSRF attempt",
-        )
-    if time.time() > stored["expires_at"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="State parameter expired — restart the login flow",
         )
 
     settings = get_settings()
@@ -150,8 +143,16 @@ async def sso_callback(
             detail=f"SSO provider error: {exc}",
         ) from exc
 
-    # --- JIT provision ---
-    provisioner = JITProvisioner(db_pool=None)  # In-memory fallback; wired to PG in prod
+    # Attach provider name so JIT provisioner stores it in PG
+    user_info.provider = provider_name
+
+    # --- JIT provision (requires PG) ---
+    if db_pool is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cannot provision user — database unavailable",
+        )
+    provisioner = JITProvisioner(db_pool=db_pool)
     user = await provisioner.provision(user_info)
 
     # --- Issue ChipWise JWT ---

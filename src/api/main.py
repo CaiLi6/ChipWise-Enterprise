@@ -79,6 +79,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Store settings on app state for DI
     app.state.settings = settings
 
+    # LM Studio probe will be started lazily on first readiness check
+    # or explicitly via start_lmstudio_probe(app) during lifespan.
+    app.state.lmstudio_status = None
+    app.state._lmstudio_probe_started = False
+
     # CORS — allow frontend origins
     app.add_middleware(
         CORSMiddleware,

@@ -52,27 +52,27 @@ class JITProvisioner:
 
     async def _provision_pg(self, sso_user: SSOUserInfo, role: str) -> dict[str, Any]:
         """Write user to PostgreSQL."""
-        try:
-            async with self._pool.acquire() as conn:
-                existing = await conn.fetchrow(
-                    "SELECT * FROM users WHERE sso_sub = $1", sso_user.sub
+        async with self._pool.acquire() as conn:
+            existing = await conn.fetchrow(
+                "SELECT * FROM users WHERE sso_provider = $1 AND sso_sub = $2",
+                sso_user.provider, sso_user.sub,
+            )
+            if existing:
+                await conn.execute(
+                    "UPDATE users SET display_name=$1, department=$2, last_login_at=NOW() "
+                    "WHERE sso_provider=$3 AND sso_sub=$4",
+                    sso_user.name, sso_user.department, sso_user.provider, sso_user.sub,
                 )
-                if existing:
-                    await conn.execute(
-                        "UPDATE users SET display_name=$1, department=$2, last_login=NOW() WHERE sso_sub=$3",
-                        sso_user.name, sso_user.department, sso_user.sub,
-                    )
-                    return dict(existing) | {"role": role}
-                else:
-                    row = await conn.fetchrow(
-                        """INSERT INTO users (sso_sub, email, display_name, department, role, last_login)
-                           VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *""",
-                        sso_user.sub, sso_user.email, sso_user.name, sso_user.department, role,
-                    )
-                    return dict(row)
-        except Exception:
-            logger.exception("JIT provisioning PG write failed; using in-memory fallback")
-            return self._provision_memory(sso_user, role)
+                return dict(existing) | {"role": role}
+            else:
+                row = await conn.fetchrow(
+                    """INSERT INTO users
+                       (sso_provider, sso_sub, email, display_name, department, role, last_login_at)
+                       VALUES ($1, $2, $3, $4, $5, $6, NOW()) RETURNING *""",
+                    sso_user.provider, sso_user.sub, sso_user.email,
+                    sso_user.name, sso_user.department, role,
+                )
+                return dict(row)
 
     def _provision_memory(self, sso_user: SSOUserInfo, role: str) -> dict[str, Any]:
         """In-memory fallback (testing / no-DB mode)."""

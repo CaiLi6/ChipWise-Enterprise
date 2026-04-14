@@ -14,6 +14,7 @@ class SSOUserInfo:
     sub: str
     email: str
     name: str
+    provider: str = ""
     department: str = ""
     groups: list[str] = field(default_factory=list)
     avatar_url: str = ""

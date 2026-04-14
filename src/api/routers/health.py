@@ -71,6 +71,28 @@ async def readiness_check(request: Request) -> ReadinessResponse:
             settings.rerank.base_url, "/health", "Reranker"
         )
 
+    # LM Studio (primary + router models)
+    # Lazy-start background probe on first readiness check
+    if not getattr(request.app.state, "_lmstudio_probe_started", False):
+        try:
+            from src.observability.lmstudio_probe import start_lmstudio_probe
+            start_lmstudio_probe(request.app)
+            request.app.state._lmstudio_probe_started = True
+        except Exception:
+            pass  # Probe start failure is non-fatal
+
+    lm_status = getattr(request.app.state, "lmstudio_status", None)
+    if lm_status and time.time() - lm_status.get("checked_at", 0) < 30:
+        # Use cached probe result (< 30s old)
+        for key in ("lmstudio_primary", "lmstudio_router"):
+            cached = lm_status.get(key)
+            if cached:
+                services[key] = ServiceStatusDetail(**cached)
+    else:
+        # No cached result or stale — probe synchronously
+        services["lmstudio_primary"] = _check_lmstudio(settings.llm.primary)
+        services["lmstudio_router"] = _check_lmstudio(settings.llm.router)
+
     all_healthy = all(s.healthy for s in services.values())
     return ReadinessResponse(
         status="ready" if all_healthy else "degraded",
@@ -141,5 +163,28 @@ def _check_http_service(base_url: str, path: str, name: str) -> ServiceStatusDet
         return ServiceStatusDetail(
             healthy=False, message=f"HTTP {resp.status_code}"
         )
+    except Exception as exc:
+        return ServiceStatusDetail(healthy=False, message=str(exc))
+
+
+def _check_lmstudio(llm_cfg: Any) -> ServiceStatusDetail:
+    """Ping GET /v1/models and verify the configured model is loaded."""
+    try:
+        import httpx
+
+        resp = httpx.get(
+            f"{llm_cfg.base_url}/models",
+            timeout=3,
+            headers={"Authorization": f"Bearer {llm_cfg.api_key}"},
+        )
+        if resp.status_code != 200:
+            return ServiceStatusDetail(healthy=False, message=f"HTTP {resp.status_code}")
+        models = [m["id"] for m in resp.json().get("data", [])]
+        if llm_cfg.model not in models:
+            return ServiceStatusDetail(
+                healthy=False,
+                message=f"Model '{llm_cfg.model}' not loaded; available: {models[:3]}",
+            )
+        return ServiceStatusDetail(healthy=True, message="OK")
     except Exception as exc:
         return ServiceStatusDetail(healthy=False, message=str(exc))
