@@ -110,9 +110,16 @@ ingestion:
     tier2: camelot
     tier3: paddleocr
   chunking:
+    strategy: datasheet
     chunk_size: 1000
     chunk_overlap: 200
     separator: ["\n\n", "\n", ". ", " "]
+    params:
+      datasheet: {chunk_size: 1000, chunk_overlap: 200}
+      fine:      {chunk_size: 256,  chunk_overlap: 32}
+      coarse:    {chunk_size: 2048, chunk_overlap: 256}
+      parent_child: {child_size: 256, parent_size: 2048, child_overlap: 32}
+      semantic:  {min_size: 200, max_size: 1500, similarity_threshold: 0.7}
   crawler:
     schedule: "0 2 * * *"
     max_per_run: 50

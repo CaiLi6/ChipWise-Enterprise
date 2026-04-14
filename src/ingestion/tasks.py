@@ -175,8 +175,8 @@ def chunk_text(self, doc_info: dict[str, Any]) -> dict[str, Any]:
     _update_progress(self.request.id, "chunking", 50, "Chunking text")
 
     try:
-        from src.ingestion.chunking.datasheet_splitter import DatasheetSplitter
-        splitter = DatasheetSplitter()
+        from src.ingestion.chunking.factory import create_chunker
+        splitter = create_chunker()
         text = doc_info.get("text", "")
         chunks = splitter.split(text, doc_id=doc_info.get("file_hash", ""))
         doc_info["chunks"] = [

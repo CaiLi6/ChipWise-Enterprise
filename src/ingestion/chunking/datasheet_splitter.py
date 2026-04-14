@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 from typing import Any
 
 from src.core.types import Chunk
+from src.ingestion.chunking.base import BaseChunker
 
 
 # Section heading patterns
@@ -20,14 +20,36 @@ _SECTION_PATTERN = re.compile(
 )
 
 
-class DatasheetSplitter:
+def _default_chunk_size() -> int:
+    """Read chunk_size from settings; fall back to 1000."""
+    try:
+        from src.core.settings import load_settings
+        s = load_settings()
+        cfg = getattr(getattr(s, "ingestion", None), "chunking", None)
+        return getattr(cfg, "chunk_size", 1000) if cfg else 1000
+    except Exception:
+        return 1000
+
+
+def _default_chunk_overlap() -> int:
+    """Read chunk_overlap from settings; fall back to 200."""
+    try:
+        from src.core.settings import load_settings
+        s = load_settings()
+        cfg = getattr(getattr(s, "ingestion", None), "chunking", None)
+        return getattr(cfg, "chunk_overlap", 200) if cfg else 200
+    except Exception:
+        return 200
+
+
+class DatasheetSplitter(BaseChunker):
     """Split datasheet text into chunks respecting section boundaries and tables."""
 
     def __init__(
-        self, chunk_size: int = 1024, chunk_overlap: int = 128
+        self, chunk_size: int | None = None, chunk_overlap: int | None = None
     ) -> None:
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
+        self.chunk_size = chunk_size if chunk_size is not None else _default_chunk_size()
+        self.chunk_overlap = chunk_overlap if chunk_overlap is not None else _default_chunk_overlap()
 
     def split(
         self,

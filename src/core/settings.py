@@ -157,6 +157,38 @@ class FrontendSettings(BaseModel):
     share: bool = False
 
 
+class ChunkingSettings(BaseModel):
+    strategy: str = "datasheet"
+    chunk_size: int = 1000
+    chunk_overlap: int = 200
+    separator: list[str] = Field(default_factory=lambda: ["\n\n", "\n", ". ", " "])
+    params: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+
+class CrawlerSettings(BaseModel):
+    schedule: str = "0 2 * * *"
+    max_per_run: int = 50
+
+
+class WatchdogSettings(BaseModel):
+    paths: list[str] = Field(default_factory=list)
+    debounce_seconds: int = 5
+    file_types: list[str] = Field(default_factory=lambda: [".pdf"])
+
+
+class PdfExtractorSettings(BaseModel):
+    tier1: str = "pdfplumber"
+    tier2: str = "camelot"
+    tier3: str = "paddleocr"
+
+
+class IngestionSettings(BaseModel):
+    pdf_extractor: PdfExtractorSettings = Field(default_factory=PdfExtractorSettings)
+    chunking: ChunkingSettings = Field(default_factory=ChunkingSettings)
+    crawler: CrawlerSettings = Field(default_factory=CrawlerSettings)
+    watchdog: WatchdogSettings = Field(default_factory=WatchdogSettings)
+
+
 # ── Root Settings ───────────────────────────────────────────────────
 
 class Settings(BaseModel):
@@ -176,6 +208,7 @@ class Settings(BaseModel):
     auth: AuthSettings = Field(default_factory=AuthSettings)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     frontend: FrontendSettings = Field(default_factory=FrontendSettings)
+    ingestion: IngestionSettings = Field(default_factory=IngestionSettings)
 
 
 # ── Environment variable overrides ──────────────────────────────────

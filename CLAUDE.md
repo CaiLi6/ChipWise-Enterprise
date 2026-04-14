@@ -114,7 +114,7 @@ The query router creates the `AgentOrchestrator` as a **lazy module-level single
 
 ### Factory + Pluggable Abstractions
 
-Every backend in `src/libs/` has `base.py` (abstract), an implementation, and `factory.py`. Switch backends via `config/settings.yaml` — no code changes. `LLMFactory` creates separate instances for `primary` (35B) and `router` (1.7B) roles.
+Every backend in `src/libs/` has `base.py` (abstract), an implementation, and `factory.py`. Switch backends via `config/settings.yaml` — no code changes. `LLMFactory` creates separate instances for `primary` (35B) and `router` (1.7B) roles. The same pattern applies to ingestion chunking.
 
 ```
 src/libs/
@@ -123,6 +123,10 @@ src/libs/
   vector_store/ base.py  milvus_store.py     factory.py
   graph_store/  base.py  kuzu_store.py       factory.py
   reranker/     base.py  bce_client.py       factory.py
+
+src/ingestion/chunking/
+  base.py  datasheet_splitter.py  fine_chunker.py  coarse_chunker.py
+  parent_child_chunker.py  semantic_chunker.py  factory.py
 ```
 
 ### Core Data Contracts (`src/core/types.py`)

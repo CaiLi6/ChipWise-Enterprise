@@ -299,7 +299,7 @@
   - `src/agent/safety/__init__.py`
   - `src/pipelines/__init__.py`
   - `src/ingestion/__init__.py`
-  - `src/ingestion/chunking/__init__.py`
+  - `src/ingestion/chunking/__init__.py`（导出 BaseChunker 和 create_chunker）
   - `src/retrieval/__init__.py`
   - `src/cache/__init__.py`
   - `src/libs/__init__.py`
@@ -2554,6 +2554,151 @@ locust -f tests/load/locustfile.py --headless \
 
 # 系统正式交付，20 人团队开始使用
 ```
+
+---
+
+## Phase 7: 切片策略可插拔 + 评估框架
+
+> 新增 Phase，对应 DEV SPEC v5.1 §4.3 Step 6 重写。BaseChunker 抽象 + 工厂 + 评估 harness。
+
+| 任务号 | 名称 | 状态 | 完成日期 | 备注 |
+|--------|------|------|---------|------|
+| 7A1 | BaseChunker 抽象 + 工厂 | [x] | 2026-04-14 | |
+| 7A2 | FineGrained / CoarseGrained / ParentChild 实现 | [x] | 2026-04-14 | |
+| 7A3 | SemanticChunker 实现（可选） | [x] | 2026-04-14 | |
+| 7A4 | chunk_text Celery 任务改走工厂 | [x] | 2026-04-14 | |
+| 7A5 | settings.yaml chunking 配置结构升级 | [x] | 2026-04-14 | |
+| 7B1 | evaluation/chunking/ 语料抽样 + qrels 生成器 | [x] | 2026-04-14 | |
+| 7B2 | 评估 runner + L1 检索级指标 | [x] | 2026-04-14 | |
+| 7B3 | L2 端到端评估 + L3 RAGAS 适配 | [x] | 2026-04-14 | |
+| 7B4 | 报告生成器 + CI smoke 集成测试 | [x] | 2026-04-14 | |
+| 7C1 | DEV SPEC + CLAUDE.md 文档同步 | [x] | 2026-04-14 | |
+
+---
+
+### 7A1：BaseChunker 抽象 + 工厂
+- **目标**：建立可插拔的 BaseChunker 接口和工厂，镜像 `src/libs/llm/factory.py` 模式。
+- **修改/创建文件**：
+  - `src/ingestion/chunking/base.py`（BaseChunker ABC）
+  - `src/ingestion/chunking/factory.py`（create_chunker() 工厂）
+  - `src/ingestion/chunking/__init__.py`（导出 BaseChunker + create_chunker）
+- **验收标准**：
+  - `create_chunker("datasheet")` 返回 `DatasheetSplitter` 实例。
+  - 所有策略实现均继承 `BaseChunker`。
+  - 策略名从 `settings.ingestion.chunking.strategy` 读取。
+- **测试方法**：`python -c "from src.ingestion.chunking.factory import create_chunker; print(create_chunker())"`
+
+---
+
+### 7A2：FineGrained / CoarseGrained / ParentChild 策略实现
+- **目标**：实现三种备选切片策略，用于与基线 DatasheetSplitter 对比。
+- **修改/创建文件**：
+  - `src/ingestion/chunking/fine_chunker.py`（FineGrainedChunker: ~256 字符）
+  - `src/ingestion/chunking/coarse_chunker.py`（CoarseGrainedChunker: ~2048 字符）
+  - `src/ingestion/chunking/parent_child_chunker.py`（ParentChildChunker: 子 256 / 父 2048）
+- **验收标准**：
+  - 每个策略 `split()` 返回合法 `list[Chunk]`。
+  - ParentChildChunker 的父块带 `metadata["is_parent"]=True`，子块带 `metadata["parent_id"]`。
+- **测试方法**：`pytest -q tests/integration/test_chunking_strategies_smoke.py -m integration`
+
+---
+
+### 7A3：SemanticChunker 实现（可选）
+- **目标**：基于 BGE-M3 句嵌入余弦断点检测的自适应切片策略，作为评估对照组。
+- **修改/创建文件**：
+  - `src/ingestion/chunking/semantic_chunker.py`
+- **验收标准**：
+  - 当 embedding 服务不可用时，自动回退到 size-based 切片（优雅降级）。
+  - `similarity_threshold` 参数可配置。
+- **测试方法**：`python -c "from src.ingestion.chunking.semantic_chunker import SemanticChunker; print(len(SemanticChunker().split('Hello. World.', doc_id='t')))"`
+
+---
+
+### 7A4：chunk_text Celery 任务改走工厂
+- **目标**：将 `src/ingestion/tasks.py` 中的硬编码 `DatasheetSplitter()` 替换为 `create_chunker()`。
+- **修改/创建文件**：
+  - `src/ingestion/tasks.py`（chunk_text 函数）
+- **验收标准**：
+  - 修改 `config/settings.yaml` 的 `ingestion.chunking.strategy` 后，Celery 任务使用新策略。
+  - 默认行为不变（strategy=datasheet）。
+- **测试方法**：`pytest -q tests/unit/test_datasheet_splitter.py`（回归测试）
+
+---
+
+### 7A5：settings.yaml chunking 配置结构升级
+- **目标**：扩展配置结构，支持 `strategy` 字段 + 每个策略的 `params`。
+- **修改/创建文件**：
+  - `config/settings.yaml`（ingestion.chunking 节点重构）
+  - `src/core/settings.py`（新增 IngestionSettings / ChunkingSettings Pydantic 模型）
+- **验收标准**：
+  - `load_settings().ingestion.chunking.strategy` 返回 `"datasheet"`。
+  - `load_settings().ingestion.chunking.params["fine"]` 返回 `{chunk_size: 256, chunk_overlap: 32}`。
+- **测试方法**：`pytest -q tests/unit/test_settings.py`
+
+---
+
+### 7B1：evaluation/chunking/ 语料抽样 + qrels 生成器
+- **目标**：从生产 PG 抽样文档并生成 qrels 草稿。
+- **修改/创建文件**：
+  - `evaluation/chunking/corpus.py`（sample_from_production）
+  - `evaluation/chunking/qrels_generator.py`（LLM 生成 QA 对）
+  - `tests/fixtures/golden_retrieval_qrels.jsonl`（初始种子 qrels）
+- **验收标准**：
+  - `python -m evaluation.chunking.corpus --sample 5 --out /tmp/test_corpus` 正常执行。
+  - qrels 输出 JSONL 每行包含 qid/query/expected_keywords/source 字段。
+- **测试方法**：手工运行 CLI
+
+---
+
+### 7B2：评估 runner + L1 检索级指标
+- **目标**：实现批量评估 runner 和 Layer 1 纯离线指标。
+- **修改/创建文件**：
+  - `evaluation/chunking/runner.py`（CLI 入口）
+  - `evaluation/chunking/metrics.py`（keyword_recall, section_recall, MRR, nDCG, context_cost）
+  - `evaluation/chunking/ingest.py`（同步 ingest 到 eval collection）
+  - `evaluation/chunking/retriever.py`（Milvus + reranker 薄封装）
+- **验收标准**：
+  - `evaluate_retrieval()` 对给定 chunks+qrel 返回正确的指标字典。
+  - Runner 输出 markdown + CSV 报告。
+- **测试方法**：`python -c "from evaluation.chunking.metrics import keyword_recall_at_k; print(keyword_recall_at_k([{'content': 'hello 168 MHz'}], ['168', 'MHz']))"`
+
+---
+
+### 7B3：L2 端到端评估 + L3 RAGAS 适配
+- **目标**：通过 AgentOrchestrator 跑端到端评估；适配 RAGAS 框架。
+- **修改/创建文件**：
+  - `evaluation/chunking/e2e.py`（evaluate_e2e: 答案关键词 + 向量相似度 + 延迟）
+  - `evaluation/chunking/ragas_adapter.py`（RAGAS 数据转换 + LM Studio judge）
+- **验收标准**：
+  - L2 指标：answer_keyword_hit / answer_snippet_similarity / latency_ms。
+  - L3 指标：仅在 `--ragas` 显式开启时运行。
+- **测试方法**：`python -c "from evaluation.chunking.e2e import evaluate_e2e"` 验证导入
+
+---
+
+### 7B4：报告生成器 + CI smoke 集成测试
+- **目标**：生成 markdown 三层指标并排对比表 + CSV 原始数据；添加回归 smoke 测试。
+- **修改/创建文件**：
+  - `evaluation/chunking/report.py`（generate_report）
+  - `tests/integration/test_chunking_strategies_smoke.py`（4 策略 × 3 断言）
+- **验收标准**：
+  - 12 个 smoke 测试全部通过。
+  - Markdown 报告包含 L1/L2/L3 三层表格。
+- **测试方法**：`pytest -q tests/integration/test_chunking_strategies_smoke.py -m integration`
+
+---
+
+### 7C1：DEV SPEC + CLAUDE.md 文档同步
+- **目标**：将代码变更同步到架构文档。
+- **修改/创建文件**：
+  - `docs/ENTERPRISE_DEV_SPEC.md`（§4.3 Step 6 重写 + 目录树 + 评估小节 + 版本 v5.1）
+  - `docs/DEVELOPMENT_PLAN.md`（追加 Phase 7 任务系列）
+  - `CLAUDE.md`（Factory 小节加 chunking）
+  - `.github/copilot-instructions.md`（镜像同步）
+- **验收标准**：
+  - `grep "RecursiveCharacterTextSplitter" docs/ENTERPRISE_DEV_SPEC.md` 无匹配。
+  - DEV SPEC 版本号 = v5.1。
+- **测试方法**：手工 grep 检查
 
 ---
 

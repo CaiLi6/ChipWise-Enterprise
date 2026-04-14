@@ -1,6 +1,6 @@
 # ChipWise Enterprise — 芯片数据智能检索与分析平台
 
-## Architecture Design Specification v5.0
+## Architecture Design Specification v5.1
 
 | 属性 | 值 |
 |------|-----|
@@ -1004,10 +1004,12 @@ llm:
   ║                                                  ▼                                  ║
   ║  STEP 6: 文本分片 (Chunking)                                       Queue: default   ║
   ║  ┌────────────────────────────────────────────────────────────────────────────────┐ ║
-  ║  │  • 策略: RecursiveCharacterTextSplitter                                       │ ║
-  ║  │    - chunk_size: 512 tokens                                                   │ ║
-  ║  │    - chunk_overlap: 64 tokens                                                 │ ║
-  ║  │    - 分隔符优先级: \n\n > \n > 。 > ；> 空格                                 │ ║
+  ║  │  • 策略: 可插拔 BaseChunker (工厂模式, 镜像 src/libs/llm/factory.py)          │ ║
+  ║  │    - 默认: DatasheetSplitter (chunk_size=1000, overlap=200)                   │ ║
+  ║  │    - 备选: FineGrainedChunker (256/32), CoarseGrainedChunker (2048/256)       │ ║
+  ║  │    - 备选: ParentChildChunker (子256/父2048), SemanticChunker (自适应)         │ ║
+  ║  │    - 切换: config/settings.yaml → ingestion.chunking.strategy, 无需改代码     │ ║
+  ║  │  • 分隔符优先级: \n\n > \n > 。 > ；> 空格                                   │ ║
   ║  │  • 元数据注入每个 Chunk:                                                      │ ║
   ║  │    - document_id, page_num, chunk_index                                       │ ║
   ║  │    - source_file, section_title                                               │ ║
@@ -1015,6 +1017,16 @@ llm:
   ║  │  • 输出: List[Chunk]                                                          │ ║
   ║  │  • 进度更新: progress = 65%                                                   │ ║
   ║  └───────────────────────────────────────────────┬────────────────────────────────┘ ║
+  ║                                                  │                                  ║
+  ║  ── §4.3.X 切片策略评估 ──                                                          ║
+  ║  独立评估 harness (evaluation/chunking/) 支持多策略离线对比:                         ║
+  ║  • 语料: 从生产 PG 抽样, 快照到 data/eval_corpus/<ts>/                              ║
+  ║  • 隔离: 每个策略独立 Milvus collection (chipwise_eval_{strategy}_{ts})             ║
+  ║  • L1 检索级指标: Keyword Recall@k, Section Recall@k, MRR@k, nDCG@k, 成本代理      ║
+  ║  • L2 端到端: 过 AgentOrchestrator, Answer KW Hit, Snippet Similarity, 延迟        ║
+  ║  • L3 RAGAS: context_precision, faithfulness, answer_relevancy, answer_correctness  ║
+  ║  • 真值源: tests/fixtures/golden_retrieval_qrels.jsonl (section 级标注)             ║
+  ║  • CLI: python -m evaluation.chunking.runner --strategies ... --corpus ... --qrels  ║
   ║                                                  │                                  ║
   ║                                                  ▼                                  ║
   ║  STEP 7: BGE-M3 向量化                                          Queue: embedding   ║
@@ -1297,9 +1309,15 @@ chipwise-enterprise/
 │   │   ├── pdf_extractor.py            # PDFExtractor: 三级表格提取 pdfplumber → Camelot → PaddleOCR (§4.6.1)
 │   │   ├── param_extractor.py          # ParamExtractor: LLM 结构化参数抽取, JSON Schema 输出 (§4.6.2)
 │   │   ├── document_manager.py         # DocumentManager: 文档生命周期 (创建/更新/删除/状态流转)
-│   │   └── chunking/                   # 文本分片策略
-│   │       ├── datasheet_splitter.py   # DatasheetSplitter: RecursiveCharacter, 512 tokens / 64 overlap (§4.3 Step 6)
-│   │       └── table_chunker.py        # TableChunker: 表格感知分片, 保持表格完整性
+│   │   └── chunking/                   # 文本分片策略（可插拔，§4.3 Step 6）
+│   │       ├── base.py                 # BaseChunker 抽象
+│   │       ├── factory.py              # create_chunker() 工厂
+│   │       ├── datasheet_splitter.py   # DatasheetSplitter（默认基线, 1000/200）
+│   │       ├── fine_chunker.py         # FineGrainedChunker（256 字符）
+│   │       ├── coarse_chunker.py       # CoarseGrainedChunker（2048 字符）
+│   │       ├── parent_child_chunker.py # ParentChildChunker（small-to-big）
+│   │       ├── semantic_chunker.py     # SemanticChunker（嵌入断点, 可选）
+│   │       └── table_chunker.py        # TableChunker: 表格感知分片, 所有策略共用
 │   │
 │   │  ── Retrieval: 检索核心 ───────────────────────────────────────
 │   │
@@ -1543,7 +1561,7 @@ chipwise-enterprise/
 │  ─────────────── 文档 ───────────────
 │
 └── docs/
-    ├── ENTERPRISE_DEV_SPEC.md          # 架构设计规格书 v5.0 (本文档)
+    ├── ENTERPRISE_DEV_SPEC.md          # 架构设计规格书 v5.1 (本文档)
     └── DEVELOPMENT_PLAN.md             # 分阶段开发任务排期与验收标准
 ```
 
@@ -1789,7 +1807,7 @@ Vision LLM 集成为 Phase 5 可选扩展任务。当前阶段仅存储图像元
 3. `extract_text` — pdfplumber 全文本提取
 4. `extract_tables` — 三级表格提取（pdfplumber → Camelot → PaddleOCR）
 5. `extract_structured_params` — LLM 结构化参数抽取（time_limit=120s）
-6. `chunk_text` — Datasheet 感知分片
+6. `chunk_text` — 可插拔分片（默认 DatasheetSplitter, 通过 create_chunker() 工厂）
 7. `embed_chunks` — BGE-M3 Embedding（调用 :8001 微服务）
 8. `store_vectors` — Milvus Upsert（dense + sparse 向量）
 9. `store_metadata` — PostgreSQL 元数据写入
@@ -3914,5 +3932,5 @@ class ChipParameter:
 
 *— End of Document —*
 
-*ChipWise Enterprise Architecture Specification v5.0*
-*Approved by CTO Office, 2026-04-08*
+*ChipWise Enterprise Architecture Specification v5.1*
+*Approved by CTO Office, 2026-04-14*
