@@ -22,7 +22,8 @@
       "Bash(.venv/bin/grep -rn \"get_current_user\\\\|Depends\" src/api/routers/)",
       "Bash(.venv/bin/pytest tests/unit/test_compare_api.py -q)",
       "Bash(.venv/bin/pytest tests/unit/test_chip_select_tool.py tests/unit/test_domestic_alternatives.py tests/unit/test_seed_alternatives.py tests/unit/test_bom_review_tool.py -q)",
-      "Bash(.venv/bin/pip install:*)"
+      "Bash(.venv/bin/pip install:*)",
+      "Bash(grep -E '\\\\.\\(py|json|jsonl\\)$')"
     ]
   }
 }
