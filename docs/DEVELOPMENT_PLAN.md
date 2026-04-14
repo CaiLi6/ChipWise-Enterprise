@@ -1,11 +1,11 @@
 # ChipWise Enterprise — Development Plan
 
-> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.1 中提取的详细开发任务排期。
+> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.2 中提取的详细开发任务排期。
 > 包含各阶段的任务分解、验收标准和测试方法。
 > 架构设计详情请参考 [ENTERPRISE_DEV_SPEC.md](./ENTERPRISE_DEV_SPEC.md)。
-> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.1（2026-04-14 更新，含 §4.3 Step 6 可插拔切片策略 + 评估框架）。
+> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.2（2026-04-14 更新，含生产加固 Phase 8: Redis CSRF state / JIT→PG / LM Studio 健康探针）。
 
-> **排期原则（严格对齐 ENTERPRISE_DEV_SPEC v5.1 架构分层与 §4.4 目录结构）**
+> **排期原则（严格对齐 ENTERPRISE_DEV_SPEC v5.2 架构分层与 §4.4 目录结构）**
 >
 > - **只按 DEV_SPEC 设计落地**：以 §4.4 目录树为"交付清单"，每一步都在文件系统上产生可见变化。
 > - **Phase 层层递进**：Phase 1 基建 → Phase 2 核心能力 → Phase 3 数据工程 → Phase 4 业务 Tool → Phase 5 高级特性 → Phase 6 前端与交付。后阶段依赖前阶段产出。
@@ -24,7 +24,8 @@
 | **Phase 5** | Advanced Features | 测试用例 / 设计规则 / 知识沉淀 / 报告导出四组高级 Tool | 9 |
 | **Phase 6** | Frontend & Delivery | Gradio 前端 + SSO + Prometheus/Grafana + 压测 + E2E 验收 + 文档 | 11 |
 | **Phase 7** | Chunking Strategies + Evaluation | 可插拔切片策略 + 评估 harness + 文档同步 | 10 |
-| **总计** | | | **88** |
+| **Phase 8** | Production Hardening | SSO CSRF→Redis / JIT→PG强制 / LM Studio 健康探针 | 3 |
+| **总计** | | | **91** |
 
 ---
 
@@ -239,6 +240,14 @@
 | 6D2 | 部署运维文档 | [x] | 2026-04-13 | |
 | 6D3 | 用户使用手册 + README 完善 | [x] | 2026-04-13 | |
 
+#### Phase 8：Production Hardening
+
+| 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
+|---------|---------|------|---------|------|
+| 8A | SSO CSRF state 迁移至 Redis (`SSOStateStore`) | [x] | 2026-04-14 | 多 Worker 安全; Redis 不可用时明确 503 |
+| 8B | JIT Provisioner 强制 PG 写入 (移除静默内存降级) | [x] | 2026-04-14 | `sso_provider` 字段写入; PG 错误向上传播 |
+| 8C | LM Studio 后台健康探针 + fast-fail + 自动恢复 | [x] | 2026-04-14 | `lmstudio_probe.py` 每 15s 探测; 恢复时自动重建 Orchestrator |
+
 ### 📈 总体进度
 
 | Phase | 总任务数 | 已完成 | 进度 |
@@ -250,7 +259,8 @@
 | Phase 5 | 9 | 9 | 100% |
 | Phase 6 | 11 | 11 | 100% |
 | Phase 7 | 10 | 10 | 100% |
-| **总计** | **88** | **88** | **100%** |
+| Phase 8 | 3 | 3 | 100% |
+| **总计** | **91** | **91** | **100%** |
 
 ---
 
@@ -2716,3 +2726,62 @@ locust -f tests/load/locustfile.py --headless \
 | **M5** | Phase 5 完成 | 全部 10 个 Agent Tools 就绪 + 报告可导出 | 4 个高级 Tool + ReportEngine |
 | **M6** | Phase 6 完成 | 系统正式上线：Gradio 前端 + SSO + 压测通过 + 文档齐全 | Gradio MVP + SSO + E2E 全绿 + 运维文档 + 用户手册 |
 | **M7** | Phase 7 完成 | 切片策略可插拔 + 评估 harness 可用 + DEV SPEC v5.1 同步 | BaseChunker + 5 策略 + evaluation/chunking/ + 文档对齐 |
+| **M8** | Phase 8 完成 | 多 Worker 安全 + 数据强一致性 + LM Studio 健康可观测 | Redis CSRF state + PG-only JIT + lmstudio_probe + DEV SPEC v5.2 |
+
+---
+
+## Phase 8: Production Hardening (2026-04-14)
+
+> 生产加固 Phase，修复三个多 Worker / 数据安全 / 可观测性 Bug。对应 DEV SPEC v5.2。
+
+| 任务号 | 名称 | 状态 | 完成日期 | 备注 |
+|--------|------|------|---------|------|
+| 8A | SSO CSRF state 迁移至 Redis | [x] | 2026-04-14 | |
+| 8B | JIT Provisioner 强制 PG 写入 | [x] | 2026-04-14 | |
+| 8C | LM Studio 后台健康探针 | [x] | 2026-04-14 | |
+
+---
+
+### 8A：SSO CSRF state 迁移至 Redis
+
+- **目标**：将 `sso.py` 中进程内 `_STATE_STORE: dict` 替换为 Redis 后端的 `SSOStateStore`，确保多 Worker 部署下 CSRF 防护正确工作。
+- **修改/创建文件**：
+  - `src/api/routers/_sso_state.py`（新建）— `SSOStateStore.put(SETEX)` / `pop(GETDEL+fallback)`
+  - `src/api/routers/sso.py` — 删除 `_STATE_STORE` 字典，注入 `get_redis` via Depends，两端点均使用 `SSOStateStore`
+  - `tests/unit/test_sso_state_store.py`（新建）— 8 个单元测试
+- **验收标准**：
+  - `SSOStateStore.put()` 调用 `redis.setex(key, ttl, value)`。
+  - `SSOStateStore.pop()` 原子性删除（GETDEL / GET+DELETE 兼容）。
+  - Redis=None 时 `put()` / `pop()` 均 raise `HTTPException(503)`。
+  - 8 个单元测试全部通过。
+
+---
+
+### 8B：JIT Provisioner 强制 PG 写入
+
+- **目标**：`JITProvisioner._provision_pg()` 写入失败时向上传播错误，而非静默降级至内存用户列表（防数据丢失）。同时修正 `sso_provider` 字段写入。
+- **修改文件**：
+  - `src/auth/sso/base.py` — `SSOUserInfo` 新增 `provider: str = ""` 字段
+  - `src/auth/sso/jit_provisioning.py` — `_provision_pg` SQL WHERE 条件包含 `sso_provider`；INSERT 写入 `sso_provider`；UPDATE 使用 `last_login_at`；移除 `except Exception → in-memory fallback`
+  - `src/api/routers/sso.py` — 注入 `get_db_pool` via Depends；`sso_callback` 设置 `user_info.provider = provider_name`；db_pool=None 时返回 503
+  - `tests/integration/test_sso_jit_pg.py`（新建）— 5 个集成测试（mock asyncpg pool）
+- **验收标准**：
+  - `_provision_pg` 使用 `sso_provider=$1 AND sso_sub=$2` 查找已有用户。
+  - PG 异常向上传播，不静默吞掉。
+  - 5 个集成测试通过。
+
+---
+
+### 8C：LM Studio 后台健康探针
+
+- **目标**：周期性检测 LM Studio primary/router 模型是否已加载，查询端点在模型不可用时快速返回 503，模型恢复后自动重建 Orchestrator。
+- **修改/创建文件**：
+  - `src/observability/lmstudio_probe.py`（新建）— `start_lmstudio_probe(app)` 后台 Task，每 15s 调用 `_check_lmstudio()`，结果写入 `app.state.lmstudio_status`
+  - `src/api/routers/health.py` — `_check_lmstudio()` 检查具体模型名是否已加载；`/readiness` 包含 `lmstudio_primary` + `lmstudio_router`；懒启动探针（首次 readiness 调用时）
+  - `src/api/routers/query.py` — `/query` 和 `/query/stream` 均检查 `lmstudio_primary.healthy`，不健康时返回 503；LM Studio 恢复时重置 `_orchestrator_initialized = False`
+  - `src/api/main.py` — `app.state.lmstudio_status = None` + `_lmstudio_probe_started = False` 初始化
+  - `tests/unit/test_api_health.py` — 3 个测试 mock `_check_lmstudio`，断言响应包含 `lmstudio_primary` / `lmstudio_router`
+- **验收标准**：
+  - LM Studio 不可用时 `/query` 返回 503，`detail` 包含有意义的错误信息。
+  - LM Studio 恢复后下一次 readiness 检查将 `healthy=True`，Orchestrator 自动重建。
+  - 全部 9 个健康测试通过。

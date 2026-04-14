@@ -5,11 +5,11 @@
 | 属性 | 值 |
 |------|-----|
 | **文档编号** | CW-ARCH-2026-001 |
-| **版本** | 5.0.0 |
+| **版本** | 5.2.0 |
 | **状态** | Approved |
 | **作者** | Enterprise AI Architecture Team |
 | **审批** | CTO Office |
-| **生效日期** | 2026-04-08 |
+| **生效日期** | 2026-04-14 |
 | **密级** | 内部公开 (Internal) |
 
 ---
@@ -23,6 +23,8 @@
 | 3.0 | 2026-04-07 | **认知智能架构升级**: Graph RAG (Kùzu 知识图谱); Agentic RAG 编排 (ReAct/Tool Calling Agent Orchestrator); Hybrid + Graph 多路召回; Pipeline → Agent Tools 重构 | Enterprise AI Architecture Team |
 | 4.0 | 2026-04-07 | **环境一致性升级**: LLM 推理引擎迁移至 LM Studio; 统一 OpenAI-compatible API; 端口 8000 → 1234; 全链路对齐 | Enterprise AI Architecture Team |
 | 5.0 | 2026-04-08 | **文档重构**: 按 7 章中文标题重新组织; 新增「核心特点」概览章; 精简冗余代码; 保留全部架构图与关键表格 | Enterprise AI Architecture Team |
+| 5.1 | 2026-04-13 | **Phase 7 可插拔切片策略**: BaseChunker 抽象 + 5 种切片策略 + 评估 harness + DEV SPEC §4.3 Step 6 对齐 | Enterprise AI Architecture Team |
+| 5.2 | 2026-04-14 | **生产加固 (Phase 8)**: SSO CSRF state 迁至 Redis (`SSOStateStore`); JIT Provisioner 强制 PG 写入 (移除静默内存降级); LM Studio 后台健康探针 + fast-fail 503 + 自动恢复 | Enterprise AI Architecture Team |
 
 ---
 
@@ -1228,8 +1230,10 @@ chipwise-enterprise/
 │   │   │   └── request_logger.py       # 请求日志: trace_id 注入 + X-Request-ID + 敏感字段脱敏 (§5.4)
 │   │   │
 │   │   ├── routers/                    # FastAPI 路由模块 (§7.2 API 接口目录)
-│   │   │   ├── health.py              # GET /health + GET /readiness + GET /metrics
+│   │   │   ├── health.py              # GET /health + GET /readiness (含 LM Studio 探针) + GET /metrics
 │   │   │   ├── auth.py                # SSO authorize/callback/logout + 本地 login/register/refresh (§4.12)
+│   │   │   ├── sso.py                 # SSO login/callback 路由 — 注入 Redis(SSOStateStore) + PG(JITProvisioner)
+│   │   │   ├── _sso_state.py          # SSOStateStore: Redis SETEX/GETDEL CSRF state (§4.12.1)
 │   │   │   ├── query.py               # POST /api/v1/query + POST /api/v1/query/stream (SSE) (§4.2)
 │   │   │   ├── compare.py             # POST /api/v1/compare — 芯片对比 (§4.9.3)
 │   │   │   ├── test_cases.py          # POST /api/v1/test-cases — 测试用例生成 (§4.9.4)
@@ -1395,7 +1399,8 @@ chipwise-enterprise/
 │       ├── trace_collector.py          # TraceCollector: Trace 持久化 → logs/traces.jsonl (§5.4)
 │       ├── logger.py                   # JSONFormatter + get_logger(): 结构化 JSON Lines + 脱敏 (§5.4)
 │       ├── token_tracker.py            # TokenTracker: Prometheus Counter llm_tokens_total (§2.11)
-│       └── metrics.py                  # PrometheusExporter: /metrics 端点, QPS/延迟/缓存命中率 (§5.5)
+│       ├── metrics.py                  # PrometheusExporter: /metrics 端点, QPS/延迟/缓存命中率 (§5.5)
+│       └── lmstudio_probe.py           # 后台健康探针: 每 15s 检测 LM Studio primary/router 模型是否已加载
 │
 │  ─────────────── 数据库迁移 ───────────────
 │
@@ -1466,6 +1471,7 @@ chipwise-enterprise/
 │   │   ├── test_milvus_collections.py  # Collection + HNSW/Sparse 索引
 │   │   ├── test_kuzu_schema.py         # 6 节点表 + 7 关系表
 │   │   ├── test_lmstudio_health.py     # LM Studio API 可用性 (primary + router)
+│   │   ├── test_sso_jit_pg.py          # JIT Provisioning 写入 PG (mock asyncpg pool)
 │   │   ├── test_embedding_service_live.py  # 真实 BGE-M3 模型推理
 │   │   ├── test_reranker_service_live.py   # 真实 bce-reranker 推理
 │   │   ├── test_rate_limiter_redis.py  # 真实 Redis 限流
@@ -2979,12 +2985,12 @@ def llm_retry(func):
 
 | 故障组件 | 降级行为 | 用户感知 |
 |----------|---------|---------|
-| **LLM** | 返回 GPTCache → 仅返回原始 chunks → 提示"AI 摘要暂不可用" | 有感知, 核心数据仍可用 |
+| **LLM (LM Studio)** | 后台探针每 15s 检测; 不健康时 `/query` 返回 HTTP 503; 恢复后 Orchestrator 自动重建 | 查询不可用, 有明确错误提示 |
 | **BGE-M3** | 退回 PostgreSQL `ILIKE` + `ts_vector` 关键词搜索 | 检索质量下降 |
 | **bce-reranker** | 跳过 Rerank, 直接使用 RRF 融合结果 | 排序可能不够精准 |
 | **Milvus** | 仅使用 PostgreSQL 结构化查询 | 语义检索不可用 |
 | **PostgreSQL** | 对话 RAG 仍可工作 (纯 Milvus) | 结构化功能不可用 |
-| **Redis** | 禁用缓存; 会话退回内存; 限流退回进程内计数器 | 透明, LLM 负载增加 |
+| **Redis** | 禁用缓存; 限流退回进程内计数器; **SSO 登录返回 503**（state 无法存储，安全优先） | SSO 不可用, 本地 JWT 登录不受影响 |
 | **Celery** | 上传排队, 在线查询不受影响 | 新文档入库延迟 |
 | **Kùzu** | graph_query 返回空 + 警告; Agent 退回 SQL+向量检索 | 图谱功能降级 |
 
@@ -3067,6 +3073,7 @@ class SSOUserInfo:
     department: str = ""
     groups: list[str] = None
     raw_claims: dict = None
+    provider: str = ""    # 由 sso_callback 注入: keycloak | dingtalk | feishu
 
 class BaseSSOProvider(ABC):
     @abstractmethod
@@ -3081,9 +3088,22 @@ class SSOProviderFactory:
                  "feishu": FeishuProvider, "azure_ad": AzureADProvider}
 ```
 
+**CSRF State — Redis 一次性存储** (`src/api/routers/_sso_state.py`):
+
+OAuth2 `state` 参数（防 CSRF）和 OIDC `nonce` 存储在 **Redis** 中而非进程内存，确保多 Worker 部署安全性：
+
+```python
+class SSOStateStore:
+    # put(key, value, ttl=600) → SETEX  (TTL 10 分钟)
+    # pop(key) → GETDEL (Redis ≥6.2) / GET+DELETE 兼容降级
+    # Redis 不可用时直接 raise HTTPException(503)
+```
+
+> **设计原则**: 无进程内存降级。Redis 不可用时登录流程应明确失败，而非接受无法验证的 CSRF state。
+
 ### 4.12.2 JIT Provisioning
 
-SSO 首次登录时自动创建本地用户，并根据 IdP 组映射 RBAC 角色：
+SSO 首次登录时自动在 **PostgreSQL** 中创建本地用户，并根据 IdP 组映射 RBAC 角色：
 
 ```python
 DEFAULT_GROUP_ROLE_MAPPING = {
@@ -3093,7 +3113,9 @@ DEFAULT_GROUP_ROLE_MAPPING = {
 }
 ```
 
-已有用户再次登录时更新 display_name / department / last_login。
+已有用户再次登录时更新 display_name / department / last_login_at。
+
+> **重要**: `JITProvisioner._provision_pg()` 必须写入真实 PostgreSQL。PG 错误会向上传播，`sso_callback` 返回 HTTP 500 而非静默降级至内存用户列表（内存降级会导致用户数据丢失）。Provider 信息 (`sso_provider`) 在 callback 中注入到 `SSOUserInfo.provider`，写入 `users.sso_provider` 列用于唯一索引 `idx_users_sso`。
 
 ### 4.12.3 JWT 与 RBAC
 
