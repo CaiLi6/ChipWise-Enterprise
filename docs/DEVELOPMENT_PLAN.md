@@ -1,9 +1,9 @@
 # ChipWise Enterprise — Development Plan
 
-> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.3 中提取的详细开发任务排期。
+> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.5 中提取的详细开发任务排期。
 > 包含各阶段的任务分解、验收标准和测试方法。
 > 架构设计详情请参考 [ENTERPRISE_DEV_SPEC.md](./ENTERPRISE_DEV_SPEC.md)。
-> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.3（2026-04-14 更新，含工程加固 + Vue3 前端 Phase 9）。
+> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.5（2026-04-14 更新，含工程化全量加固 Phase 11）。
 
 > **排期原则（严格对齐 ENTERPRISE_DEV_SPEC v5.3 架构分层与 §4.4 目录结构）**
 >
@@ -26,7 +26,9 @@
 | **Phase 7** | Chunking Strategies + Evaluation | 可插拔切片策略 + 评估 harness + 文档同步 | 10 |
 | **Phase 8** | Production Hardening | SSO CSRF→Redis / JIT→PG强制 / LM Studio 健康探针 | 3 |
 | **Phase 9** | Engineering Hardening + Vue3 | ruff/mypy 零化 + 测试分层 + Vue3 前端脚手架 | 5 |
-| **总计** | | | **96** |
+| **Phase 10** | Vue3 Frontend Usability | API 契约对齐 + 共享组件 + 守卫 + Vitest | 6 |
+| **Phase 11** | Engineering Hardening (Pre-Deploy) | CI + pre-commit + 监控 + 安全 + Docker + 文档 + E2E | 11 |
+| **总计** | | | **113** |
 
 ---
 
@@ -270,6 +272,22 @@
 | 10E | Vitest 组件单测 (19 tests) | [x] | 2026-04-15 | vitest + @vue/test-utils + happy-dom; 5 测试文件 19 用例全绿 |
 | 10F | Frontend CI (frontend.yml) | [x] | 2026-04-15 | .github/workflows/frontend.yml: build + test:run |
 
+#### Phase 11：Engineering Hardening (Pre-Deployment)
+
+| 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
+|---------|---------|------|---------|------|
+| 11A | Backend Test CI + 覆盖率门禁 | [x] | 2026-04-14 | .github/workflows/test.yml (unit + integration_nollm jobs); --cov-fail-under=65; docs/COVERAGE_GAPS.md; Milvus skip hook in conftest.py |
+| 11B | Pre-commit hooks | [x] | 2026-04-14 | .pre-commit-config.yaml (ruff/mypy/trailing-whitespace/detect-private-key/frontend-build); lint.yml 改为跑 pre-commit; LOCAL_DEVELOPMENT.md 加 setup 节 |
+| 11C | 监控即代码 | [x] | 2026-04-14 | config/prometheus/alert_rules.yml (修复 dangling reference, 3 groups 10 rules); 3 个 Grafana dashboards (llm-performance/retrieval-quality/ingestion-pipeline) |
+| 11D | 安全扫描基线 + 门禁 | [x] | 2026-04-14 | Bandit (1 HIGH accepted: MD5 cache key) + pip-audit (0 vuln) + npm-audit (0 vuln); docs/SECURITY_BASELINE.md; security-scan.yaml 追加 bandit + npm-audit jobs; .gitignore reports/ |
+| 11E | 架构文档 + 贡献规范 | [x] | 2026-04-14 | docs/ARCHITECTURE.md (Mermaid 5 图); CONTRIBUTING.md; .github/pull_request_template.md; .github/ISSUE_TEMPLATE/{bug_report,feature_request}.md |
+| 11F | 应用 Dockerfile + 生产 compose | [x] | 2026-04-14 | Dockerfile (multi-stage); Dockerfile.celery; docker-compose.prod.yml (api/4 workers/frontend-web); frontend/web/nginx.conf + Dockerfile |
+| 11G | 前端 E2E (Playwright + MSW) | [x] | 2026-04-14 | playwright.config.ts; e2e/mocks/handlers.ts; 5 spec files (14 tests: login/query/compare/documents/auth-guard); frontend.yml 追加 playwright step; vitest exclude e2e/ |
+| 11H | 覆盖率 gap 补齐 | [x] | 2026-04-14 | test_cache_invalidator.py (8 tests, 0%→70%+); test_tasks_api.py (5 tests, 42%→70%+); 总覆盖率 77%→78%, 706 passed |
+| 11I | SBOM + 许可证审计 | [x] | 2026-04-14 | sbom-python.json + licenses-python.json; docs/COMPLIANCE.md (0 GPL, 5 LGPL/MPL accepted) |
+| 11J | 测试数据 + Locust ramp | [x] | 2026-04-14 | tests/fixtures/seed_chips.sql (5 chips + params + errata); conftest_seed.py; locustfile.py ramp profiles (smoke/baseline/stress) |
+| 11K | Gradio deprecated + README + DEVSPEC v5.5 | [x] | 2026-04-14 | gradio_app.py DeprecationWarning; README.md 前端入口改为 Vue3; DEVSPEC v5.5; DEVELOPMENT_PLAN Phase 11 |
+
 ### 📈 总体进度
 
 | Phase | 总任务数 | 已完成 | 进度 |
@@ -284,7 +302,8 @@
 | Phase 8 | 3 | 3 | 100% |
 | Phase 9 | 5 | 5 | 100% |
 | Phase 10 | 6 | 6 | 100% |
-| **总计** | **102** | **102** | **100%** |
+| Phase 11 | 11 | 11 | 100% |
+| **总计** | **113** | **113** | **100%** |
 
 ---
 

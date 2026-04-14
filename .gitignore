@@ -52,3 +52,9 @@ htmlcov/
 
 # Alembic
 alembic/versions/*.pyc
+
+# Reports (keep baselines, exclude HTML)
+reports/*.html
+!reports/*baseline*.json
+!reports/sbom-*.json
+!reports/licenses-*.json

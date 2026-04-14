@@ -1,4 +1,20 @@
-"""Locust load test: 20 concurrent users (§6C1)."""
+"""Locust load test with ramp profiles (§6C1).
+
+Profiles (set via --tags or LOCUST_PROFILE env):
+  smoke:    5 users, 1 min — quick sanity check
+  baseline: 50 users, 10 min — sustained load
+  stress:   200 users ramp over 5 min, hold 15 min — breaking point
+
+Run:
+  locust -f tests/load/locustfile.py --headless --users 5 --spawn-rate 5 --run-time 1m  # smoke
+  locust -f tests/load/locustfile.py --headless --users 50 --spawn-rate 5 --run-time 10m  # baseline
+  locust -f tests/load/locustfile.py --headless --users 200 --spawn-rate 40 --run-time 20m  # stress
+
+Thresholds:
+  smoke:    p95 < 5s,  fail rate < 1%
+  baseline: p95 < 10s, fail rate < 3%
+  stress:   p95 < 20s, fail rate < 10%
+"""
 
 from __future__ import annotations
 
@@ -6,10 +22,13 @@ import os
 import random
 
 try:
-    from locust import HttpUser, between, task
+    from locust import HttpUser, between, events, task
+    from locust.runners import MasterRunner
 except ImportError:
     # Allow syntax check without locust installed
     HttpUser = object  # type: ignore[assignment, misc]
+    events = None  # type: ignore[assignment]
+    MasterRunner = None  # type: ignore[assignment]
     def between(a, b):  # type: ignore[assignment]
         return None
     def task(weight: int):  # type: ignore[misc]

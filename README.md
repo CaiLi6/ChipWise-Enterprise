@@ -25,7 +25,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Layer 1  Gradio Frontend :7860  (MVP → Vue3 + Element Plus)│
+│  Layer 1  Vue3 + Element Plus (production) / Gradio (legacy)│
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 2  FastAPI Gateway :8080  JWT · Rate Limit · CORS     │
 ├─────────────────────────────────────────────────────────────┤
@@ -64,7 +64,7 @@
 | 缓存/队列 | Redis 7（GPTCache 语义缓存 + Celery Broker） |
 | 任务队列 | Celery 5（3 Worker Pool + Beat 调度器） |
 | API 框架 | FastAPI + Pydantic v2 + uvicorn |
-| 前端 | Gradio 4（MVP）→ Vue3 + Element Plus（Phase X） |
+| 前端 | Vue3 + Element Plus（production） / Gradio 4（legacy, deprecated） |
 | 监控 | Prometheus + Grafana（Token 追踪 §2.11） |
 | 安全 | JWT RS256 + bcrypt + OIDC + CodeQL + Trivy |
 
@@ -106,8 +106,27 @@ bash scripts/start_services.sh
 python scripts/healthcheck.py   # 验证全部 7 个服务健康
 ```
 
-访问前端：`http://localhost:7860`
+访问前端：`http://localhost:5173`（Vue3 dev server）或 `http://localhost:7860`（Gradio legacy）
 API 文档：`http://localhost:8080/docs`
+
+### 前端开发（Vue3，推荐）
+
+```bash
+cd frontend/web
+npm install
+npm run dev          # Dev server at http://localhost:5173
+npm run build        # Production build
+npm run test:run     # Vitest unit tests (19 tests)
+npx playwright test  # E2E tests (14 specs)
+```
+
+### Gradio Legacy MVP（已废弃）
+
+```bash
+pip install gradio
+python -c "from frontend.gradio_app import create_gradio_app; create_gradio_app().launch()"
+# Warning: DeprecationWarning will be emitted
+```
 
 详细部署步骤见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 
@@ -117,19 +136,24 @@ API 文档：`http://localhost:8080/docs`
 
 | 文档 | 说明 |
 |---|---|
-| [docs/ENTERPRISE_DEV_SPEC.md](docs/ENTERPRISE_DEV_SPEC.md) | 完整架构规格（7 章，单一事实来源） |
-| [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | 6 阶段 78 任务开发计划 |
+| [docs/ENTERPRISE_DEV_SPEC.md](docs/ENTERPRISE_DEV_SPEC.md) | 完整架构规格（v5.5，单一事实来源） |
+| [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md) | 11 阶段 113 任务开发计划 |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 安装部署指南（含 SSO 配置） |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | 运维手册（备份、故障排查、CI/CD） |
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | 用户使用手册（面向硬件工程师） |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构总览 + Mermaid 图（10 分钟入门） |
 | [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) | OWASP Top 10 安全审计报告 |
+| [docs/SECURITY_BASELINE.md](docs/SECURITY_BASELINE.md) | 安全扫描基线（Bandit/pip-audit/npm-audit） |
+| [docs/COMPLIANCE.md](docs/COMPLIANCE.md) | 许可证合规 + SBOM |
+| [docs/COVERAGE_GAPS.md](docs/COVERAGE_GAPS.md) | 测试覆盖率 gap 分析 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南（分支策略、PR 流程） |
 | [CLAUDE.md](CLAUDE.md) | AI 助手上下文（架构摘要、编码规范） |
 
 ---
 
 ## 项目进度
 
-所有 6 个阶段、78 个任务已全部完成（100%）。
+所有 11 个阶段、113 个任务已全部完成（100%）。
 
 | Phase | 任务数 | 核心交付 |
 |---|---|---|
@@ -139,6 +163,11 @@ API 文档：`http://localhost:8080/docs`
 | Phase 4 | 8 | chip_compare、chip_select、bom_review 业务 Tool |
 | Phase 5 | 9 | test_case_gen、design_rule_check、knowledge_search、report_export |
 | Phase 6 | 11 | Gradio UI、SSO/OIDC、压测、E2E 测试、监控、运维文档 |
+| Phase 7 | 3 | Chunking 策略 + eval harness |
+| Phase 8 | 6 | 生产化：SSO→Redis、JIT→PG、LM Studio health |
+| Phase 9 | 8 | Lint/mypy 零化、integration_nollm 分层、本地 docker friendly |
+| Phase 10 | 6 | Vue3 可用化：组件、守卫、refresh、Vitest 19 tests |
+| Phase 11 | 12 | 工程化加固：CI、pre-commit、监控、安全、Docker、文档、E2E |
 
 ---
 
@@ -150,7 +179,7 @@ API 文档：`http://localhost:8080/docs`
 4. 向 `develop` 提交 PR，需 ≥1 位 Reviewer 审批 + CI 全绿
 5. 发布经理在阶段边界将 `develop` 合并至 `main`
 
-详见 [CLAUDE.md](CLAUDE.md) 中的开发工作流章节。
+详见 [CONTRIBUTING.md](CONTRIBUTING.md) 和 [CLAUDE.md](CLAUDE.md) 中的开发工作流章节。
 
 ---
 

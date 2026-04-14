@@ -73,10 +73,21 @@ cp .env.example .env
 
 Key variables: `PG_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET_KEY`, `SSO_CLIENT_SECRET`, `VITE_API_BASE_URL`.
 
+## Pre-commit Setup
+
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit install --hook-type pre-push
+pre-commit run --all-files   # First-time full-repo check
+```
+
+Hooks run automatically on `git commit` (ruff, mypy, trailing whitespace, etc.) and `git push` (frontend build). Configuration: `.pre-commit-config.yaml`.
+
 ## Workflow: Local → Deployment Machine
 
 1. Develop & test locally (`pytest -m "unit or integration_nollm"`)
-2. Lint: `ruff check src tests && mypy src`
+2. Lint: `ruff check src tests && mypy src` (or let pre-commit handle it)
 3. Commit & push
 4. On deployment machine: `git pull && pytest -q -m integration`
 5. Start full stack with LM Studio for E2E verification

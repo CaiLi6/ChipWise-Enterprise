@@ -1,11 +1,11 @@
 # ChipWise Enterprise — 芯片数据智能检索与分析平台
 
-## Architecture Design Specification v5.4
+## Architecture Design Specification v5.5
 
 | 属性 | 值 |
 |------|-----|
 | **文档编号** | CW-ARCH-2026-001 |
-| **版本** | 5.4.0 |
+| **版本** | 5.5.0 |
 | **状态** | Approved |
 | **作者** | Enterprise AI Architecture Team |
 | **审批** | CTO Office |
@@ -27,6 +27,7 @@
 | 5.2 | 2026-04-14 | **生产加固 (Phase 8)**: SSO CSRF state 迁至 Redis (`SSOStateStore`); JIT Provisioner 强制 PG 写入 (移除静默内存降级); LM Studio 后台健康探针 + fast-fail 503 + 自动恢复 | Enterprise AI Architecture Team |
 | 5.3 | 2026-04-14 | **工程加固 + Vue3 前端 (Phase 9)**: ruff/mypy 零错误 + lint.yml CI 门禁; integration_nollm 测试分层; 20 个新单测 (chunking + probe); Vue3 前端脚手架 (Element Plus + Pinia + 4 核心页面); healthcheck --local 模式 | Enterprise AI Architecture Team |
 | 5.4 | 2026-04-15 | **Vue3 前端可用化 (Phase 10)**: API 契约对齐 (documents.ts 路径 bug 修复 + types/api.ts 全量对标 Pydantic); 共享组件抽离 (AppLayout/MessageBubble/CitationCard/LoadingError); 路由守卫 + 401 refresh token 闭环; DocumentsView 真实 API 联调; Vitest 19 测试全绿; frontend.yml CI | Enterprise AI Architecture Team |
+| 5.5 | 2026-04-14 | **工程化全量加固 (Phase 11)**: Backend test CI + 覆盖率门禁 (78%); pre-commit hooks; Prometheus alert rules + 3 Grafana dashboards; 安全扫描基线 (Bandit/pip-audit/npm-audit); 主应用 Dockerfile + docker-compose.prod.yml; docs/ARCHITECTURE.md + CONTRIBUTING.md + PR/issue 模板; Playwright E2E 14 specs; SBOM + 许可证审计; 测试 seed data + Locust ramp profiles; Gradio deprecated | Enterprise AI Architecture Team |
 
 ---
 
@@ -418,7 +419,7 @@ llm:
 
 - **Phase 1 (MVP)**: Gradio (:7860)，快速验证
 - **Phase 2 (Production)**: Vue3 + Element Plus，企业级前端
-- **Vue3 现状**: Vue3 工程已创建于 `frontend/web/`，包含 Vite + TypeScript + Element Plus + Pinia + Vue Router，含登录/查询/对比/文档管理四个核心页面。Phase 10 完成可用化：API 契约对齐 (types/api.ts 全量对标 Pydantic)；共享组件 (AppLayout/MessageBubble/CitationCard/LoadingError)；路由守卫 + 401 refresh token 重放闭环；DocumentsView 真实 API 联调；Vitest 19 测试全绿；`.github/workflows/frontend.yml` CI 门禁。Gradio MVP 保留共存。
+- **Vue3 现状**: Vue3 工程已创建于 `frontend/web/`，包含 Vite + TypeScript + Element Plus + Pinia + Vue Router，含登录/查询/对比/文档管理四个核心页面。Phase 10 完成可用化：API 契约对齐 (types/api.ts 全量对标 Pydantic)；共享组件 (AppLayout/MessageBubble/CitationCard/LoadingError)；路由守卫 + 401 refresh token 重放闭环；DocumentsView 真实 API 联调；Vitest 19 测试全绿；`.github/workflows/frontend.yml` CI 门禁。Phase 11 新增 Playwright E2E 测试 (14 specs)，nginx 生产配置，前端 Dockerfile。Gradio MVP 已标记 deprecated，Vue3 为唯一生产前端。
 
 ## 3.7 DevOps 工具链
 

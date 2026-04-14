@@ -1,10 +1,22 @@
-"""ChipWise Gradio MVP frontend (§6A1, §6A2, §6A3)."""
+"""ChipWise Gradio MVP frontend (§6A1, §6A2, §6A3).
+
+DEPRECATED: This Gradio MVP is retained for backward compatibility only.
+Production frontend is frontend/web/ (Vue3 + Element Plus).
+This file may be removed in a future release.
+"""
 
 from __future__ import annotations
 
 import json
 import logging
+import warnings
 from typing import Any
+
+warnings.warn(
+    "frontend/gradio_app.py is deprecated; use frontend/web/ (Vue3 + Element Plus)",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 logger = logging.getLogger(__name__)
 

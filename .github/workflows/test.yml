@@ -1,0 +1,96 @@
+name: backend-test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  unit:
+    name: Unit Tests + Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run unit tests with coverage
+        run: pytest -q -m unit --cov=src --cov-report=xml --cov-report=term --cov-fail-under=65
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage.xml
+
+  integration_nollm:
+    name: Integration Tests (no LM Studio)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: chipwise
+          POSTGRES_PASSWORD: chipwise
+          POSTGRES_DB: chipwise
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      milvus:
+        image: milvusdb/milvus:v2.4.1
+        ports:
+          - "19530:19530"
+          - "9091:9091"
+        options: >-
+          --health-cmd "curl -f http://localhost:9091/healthz"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+          --health-start-period 40s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Initialize schemas
+        env:
+          PG_PASSWORD: chipwise
+          REDIS_PASSWORD: ""
+        run: |
+          alembic upgrade head
+          python scripts/init_milvus.py
+          python scripts/init_kuzu.py
+
+      - name: Run integration tests (no LM Studio)
+        env:
+          PG_PASSWORD: chipwise
+          REDIS_PASSWORD: ""
+        run: pytest -q -m integration_nollm --tb=short

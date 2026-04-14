@@ -1,0 +1,86 @@
+groups:
+  - name: chipwise-api
+    interval: 30s
+    rules:
+      - alert: HighRequestLatencyP95
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency > 10s"
+          description: "Endpoint {{ $labels.handler }} p95 latency = {{ $value }}s"
+
+      - alert: High5xxRate
+        expr: >
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          / sum(rate(http_requests_total[5m])) > 0.05
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "5xx error rate > 5%"
+
+      - alert: LMStudioDown
+        expr: chipwise_lmstudio_healthy == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LM Studio unhealthy (primary or router model unloaded)"
+
+  - name: chipwise-infra
+    interval: 60s
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+
+      - alert: MilvusDown
+        expr: milvus_num_node == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Milvus standalone node is down"
+
+      - alert: CeleryQueueBacklog
+        expr: celery_queue_length > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Celery queue {{ $labels.queue }} backlog > 100"
+
+  - name: chipwise-retrieval
+    interval: 60s
+    rules:
+      - alert: LowCacheHitRate
+        expr: >
+          rate(chipwise_cache_hits_total[15m])
+          / rate(chipwise_cache_lookups_total[15m]) < 0.2
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "Semantic cache hit rate < 20% over 15m"
+
+      - alert: HighLLMTokenBurn
+        expr: rate(chipwise_llm_tokens_total[5m]) > 1000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM token consumption rate > 1000 tokens/s sustained for 10m"

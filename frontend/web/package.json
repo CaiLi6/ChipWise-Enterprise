@@ -19,12 +19,14 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@testing-library/vue": "^8.1.0",
     "@types/node": "^24.12.2",
     "@vitejs/plugin-vue": "^6.0.5",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.9.1",
     "happy-dom": "^20.9.0",
+    "msw": "^2.13.3",
     "sass": "^1.99.0",
     "typescript": "~6.0.2",
     "vite": "^8.0.4",

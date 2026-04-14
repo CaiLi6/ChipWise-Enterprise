@@ -1,0 +1,2 @@
+FROM chipwise-api:latest
+CMD ["celery", "-A", "src.ingestion.tasks", "worker", "-Q", "default,embedding", "-c", "1", "-n", "w1@%h"]
