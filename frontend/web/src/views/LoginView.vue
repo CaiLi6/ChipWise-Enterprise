@@ -15,13 +15,15 @@ async function handleLogin() {
   error.value = ''
   try {
     await auth.login(form.value)
-    router.push('/query')
+    const redirect = router.currentRoute.value.query.redirect as string
+    router.push(redirect || '/query')
   } catch (_e: unknown) {
     if (import.meta.env.DEV) {
       // Mock login in dev mode
       localStorage.setItem('chipwise_token', 'dev-mock-token')
       localStorage.setItem('chipwise_user', form.value.username || 'dev')
-      router.push('/query')
+      const redirect = router.currentRoute.value.query.redirect as string
+      router.push(redirect || '/query')
       return
     }
     error.value = '登录失败，请检查用户名和密码'

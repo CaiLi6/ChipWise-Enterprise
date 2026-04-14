@@ -259,6 +259,17 @@
 | 9D | Vue3 前端脚手架 (4 核心页面) | [x] | 2026-04-14 | `frontend/web/`: Vite + Vue3 + TS + Element Plus + Pinia; LoginView/QueryView/CompareView/DocumentsView |
 | 9E | 配置与脚本友好化 | [x] | 2026-04-14 | .env.example VITE_API_BASE_URL; docker-compose.override; healthcheck --local; LOCAL_DEVELOPMENT.md |
 
+#### Phase 10：Vue3 Frontend Usability
+
+| 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
+|---------|---------|------|---------|------|
+| 10A | API 契约对齐 (types + documents 路径修复) | [x] | 2026-04-15 | documents.ts POST 路径修正 + list/getById; types/api.ts 全量对齐 Pydantic (Citation/DocumentMeta/LoginResponse) |
+| 10B | 共享组件抽离 + 路由重构 | [x] | 2026-04-15 | AppLayout/MessageBubble/CitationCard/LoadingError; 嵌套路由 + App.vue 简化 |
+| 10C | 路由守卫 + Auth refresh 闭环 | [x] | 2026-04-15 | beforeEach 守卫 + ?redirect= 回跳; 401 refresh-retry (独立 axios 防递归); auth store refresh action |
+| 10D | DocumentsView 真实 API + 503 处理 | [x] | 2026-04-15 | 真实 upload/list API + 5s 轮询 + clearInterval; QueryView 503 系统消息气泡 |
+| 10E | Vitest 组件单测 (19 tests) | [x] | 2026-04-15 | vitest + @vue/test-utils + happy-dom; 5 测试文件 19 用例全绿 |
+| 10F | Frontend CI (frontend.yml) | [x] | 2026-04-15 | .github/workflows/frontend.yml: build + test:run |
+
 ### 📈 总体进度
 
 | Phase | 总任务数 | 已完成 | 进度 |
@@ -272,7 +283,8 @@
 | Phase 7 | 10 | 10 | 100% |
 | Phase 8 | 3 | 3 | 100% |
 | Phase 9 | 5 | 5 | 100% |
-| **总计** | **96** | **96** | **100%** |
+| Phase 10 | 6 | 6 | 100% |
+| **总计** | **102** | **102** | **100%** |
 
 ---
 
@@ -2884,3 +2896,94 @@ locust -f tests/load/locustfile.py --headless \
   - `python scripts/healthcheck.py --local` 在仅 Docker 基础设施运行时通过。
   - `docs/LOCAL_DEVELOPMENT.md` 包含从零开始的本地开发步骤。
 - **测试方法**：`python scripts/healthcheck.py --local`
+
+---
+
+## Phase 10: Vue3 Frontend Usability (2026-04-15)
+
+> **目标**: 将 Phase 9 的 Vue3 脚手架从"能 build、能点路由、有 mock 数据"推进到"内部可用"级别——API 契约对齐、共享组件抽离、路由守卫 + 401 refresh 闭环、DocumentsView 真实 API 联调、Vitest 19 测试覆盖、前端 CI 门禁。
+
+### 10A：API 契约对齐
+- **目标**：修复前后端 API 路径不匹配 bug，TypeScript 类型全量对齐 Pydantic 模型。
+- **修改文件**：
+  - `frontend/web/src/api/documents.ts` — POST 路径修正为 `/api/v1/documents/upload`；新增 `listDocuments()` + `getDocument()`
+  - `frontend/web/src/types/api.ts` — 全量对齐: `LoginResponse` 含 `refresh_token` + `expires_in`; 新增 `Citation` / `DocumentMeta` / `DocumentListResponse`
+  - `frontend/web/src/api/auth.ts` — 新增 `refreshToken()` 方法 (使用独立 axios 实例防递归)
+- **验收标准**：
+  - `npm run build` 零 TS 错误。
+  - `types/api.ts` 每个 interface 与后端 Pydantic 模型一一对应。
+- **测试方法**：`cd frontend/web && npm run build`
+
+---
+
+### 10B：共享组件抽离 + 路由重构
+- **目标**：抽出共享组件消除重复代码；路由改为嵌套结构 + AppLayout 容器。
+- **新建文件**：
+  - `frontend/web/src/components/AppLayout.vue` — 侧栏 (可收起) + 嵌套 `<router-view>`
+  - `frontend/web/src/components/MessageBubble.vue` — 聊天气泡 (user/assistant/system) + 引用
+  - `frontend/web/src/components/CitationCard.vue` — 引用卡片 (chunk 摘要 + score hover 详情)
+  - `frontend/web/src/components/LoadingError.vue` — 统一 loading/error/empty 状态包装器
+- **修改文件**：
+  - `frontend/web/src/router/index.ts` — 嵌套路由 (AppLayout 为父) + `/login` 独立
+  - `frontend/web/src/App.vue` — 简化为纯 `<router-view>` 容器
+  - `frontend/web/src/views/QueryView.vue` — 使用 MessageBubble/CitationCard 替代内联气泡
+- **验收标准**：
+  - 4 个共享组件均可独立渲染。
+  - 路由嵌套结构生效，`/query`/`/compare`/`/documents` 在 AppLayout 内显示侧栏。
+- **测试方法**：`npm run build` + Vitest 组件测试
+
+---
+
+### 10C：路由守卫 + Auth Refresh 闭环
+- **目标**：未登录用户无法访问受保护路由；401 时自动 refresh token 重放请求。
+- **修改文件**：
+  - `frontend/web/src/router/index.ts` — `beforeEach` 守卫: requiresAuth meta + ?redirect= 回跳
+  - `frontend/web/src/api/client.ts` — 401 拦截器: refresh → 重放原请求 (含并发请求队列)
+  - `frontend/web/src/stores/auth.ts` — 新增 `refreshToken` ref + `refresh()` action; login 存 refresh_token
+  - `frontend/web/src/views/LoginView.vue` — 支持 `?redirect=` 查询参数跳转
+- **验收标准**：
+  - 访问 `/query` 未登录时跳 `/login?redirect=/query`; 登录后回到 `/query`。
+  - access_token 过期后自动 refresh 并重放原请求，不弹登录页。
+  - refresh 失败时明确 logout 跳登录。
+- **测试方法**：Vitest auth store 测试 (login/logout/refresh 状态流转)
+
+---
+
+### 10D：DocumentsView 真实 API + 503 优雅处理
+- **目标**：DocumentsView 从 mock 数据改为真实 API 调用；QueryView 的 503 错误优雅展示。
+- **修改文件**：
+  - `frontend/web/src/views/DocumentsView.vue` — 真实 `uploadDocument()` + `listDocuments()` + 5s 轮询 + `onUnmounted clearInterval`
+  - `frontend/web/src/views/QueryView.vue` — 503 响应时展示系统消息气泡
+- **验收标准**：
+  - 上传 PDF 后 API 返回 `task_id`，列表刷新显示新条目。
+  - 轮询正常工作，切离路由后 clearInterval 无泄漏。
+  - QueryView 503 展示 "后端 LLM 服务暂时不可用" 系统消息。
+- **测试方法**：本地 `docker-compose up -d postgres redis milvus` + `uvicorn` + `npm run dev` 手动端到端
+
+---
+
+### 10E：Vitest 组件单测
+- **目标**：建立前端测试基线，覆盖核心组件和 store。
+- **新建文件**：
+  - `frontend/web/vitest.config.ts` — happy-dom 环境 + globals: true
+  - `frontend/web/src/components/__tests__/MessageBubble.test.ts` (5 tests)
+  - `frontend/web/src/components/__tests__/CitationCard.test.ts` (3 tests)
+  - `frontend/web/src/components/__tests__/LoadingError.test.ts` (4 tests)
+  - `frontend/web/src/components/__tests__/AppLayout.test.ts` (2 tests)
+  - `frontend/web/src/stores/__tests__/auth-store.test.ts` (5 tests)
+- **修改文件**：
+  - `frontend/web/package.json` — 新增 vitest / @vue/test-utils / happy-dom; scripts: test/test:run
+- **验收标准**：
+  - `npm run test:run` — 5 个测试文件 19 个用例全绿。
+- **测试方法**：`cd frontend/web && npm run test:run`
+
+---
+
+### 10F：Frontend CI 门禁
+- **目标**：前端代码变更自动触发 build + test。
+- **新建文件**：
+  - `.github/workflows/frontend.yml` — Node 20; npm ci → build → test:run; paths filter `frontend/web/**`
+- **验收标准**：
+  - Push/PR 改动 `frontend/web/**` 时自动触发 CI。
+  - build 和 test:run 均通过。
+- **测试方法**：GitHub Actions 验证

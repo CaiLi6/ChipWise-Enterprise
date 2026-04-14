@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **ChipWise Enterprise** — a chip data intelligence retrieval and analysis platform for semiconductor hardware teams. Uses **Agentic RAG** (ReAct Agent + Tool Calling) and **Graph RAG** (Kùzu knowledge graph) for natural-language chip queries, comparisons, BOM review, and test case generation. All inference runs locally on a single AMD Ryzen AI 395 machine (128 GB RAM) via LM Studio — zero data exfiltration.
 
-All 7 development phases are complete. Architecture spec: `docs/ENTERPRISE_DEV_SPEC.md` (v5.1). Task breakdown: `docs/DEVELOPMENT_PLAN.md` (88 tasks).
+All 10 development phases are complete. Architecture spec: `docs/ENTERPRISE_DEV_SPEC.md` (v5.4). Task breakdown: `docs/DEVELOPMENT_PLAN.md` (102 tasks).
 
 ## Prerequisites
 

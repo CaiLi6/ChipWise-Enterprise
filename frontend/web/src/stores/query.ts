@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import type { Citation } from '@/types/api'
 
 export interface ChatMessage {
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   content: string
-  citations?: Array<{ chunk_id: string; content: string }>
+  citations?: Citation[]
 }
 
 export const useQueryStore = defineStore('query', () => {

@@ -1,3 +1,5 @@
+// ---- Core data contracts (aligned with src/core/types.py) ----
+
 export interface Chunk {
   chunk_id: string
   doc_id: string
@@ -8,24 +10,32 @@ export interface Chunk {
   metadata: Record<string, unknown>
 }
 
-export interface RetrievalResult {
-  chunks: Chunk[]
-  query: string
-  total: number
+/** Citation returned inside QueryResponse.citations[] */
+export interface Citation {
+  chunk_id: string
+  doc_id: string
+  content: string
+  score: number
+  source?: string
+  page_number?: number
+  metadata?: Record<string, unknown>
 }
+
+// ---- Query ----
 
 export interface QueryRequest {
   query: string
   session_id?: string
-  stream?: boolean
+  top_k?: number
 }
 
 export interface QueryResponse {
   answer: string
-  citations: Chunk[]
+  citations: Citation[]
   trace_id: string
-  session_id: string
 }
+
+// ---- Compare ----
 
 export interface CompareRequest {
   chips: string[]
@@ -37,6 +47,8 @@ export interface CompareResult {
   parameters: Record<string, Record<string, string>>
 }
 
+// ---- Auth (aligned with src/api/schemas/auth.py::TokenResponse) ----
+
 export interface LoginRequest {
   username: string
   password: string
@@ -44,13 +56,38 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   access_token: string
+  refresh_token: string
   token_type: string
-  user: { id: string; username: string; role: string }
+  expires_in: number
 }
 
+// ---- Documents (aligned with src/api/routers/documents.py) ----
+
+/** Response from POST /api/v1/documents/upload */
 export interface DocumentUpload {
-  id: string
-  filename: string
+  task_id: string
   status: string
-  task_id?: string
+  filename: string
+  file_size: number
+  message: string
+}
+
+/** Single document item from GET /api/v1/documents */
+export interface DocumentMeta {
+  doc_id?: number
+  title?: string
+  filename?: string
+  status: string
+  source_url?: string
+  file_path?: string
+  doc_type?: string
+  metadata?: Record<string, unknown>
+}
+
+/** Paginated response from GET /api/v1/documents */
+export interface DocumentListResponse {
+  documents: DocumentMeta[]
+  page: number
+  per_page: number
+  total: number
 }

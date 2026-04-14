@@ -3,6 +3,7 @@ import { ref, nextTick } from 'vue'
 import { useQueryStore } from '@/stores/query'
 import { streamQuery } from '@/api/query'
 import { Promotion } from '@element-plus/icons-vue'
+import MessageBubble from '@/components/MessageBubble.vue'
 
 const store = useQueryStore()
 const input = ref('')
@@ -16,7 +17,7 @@ function scrollToBottom() {
   })
 }
 
-function handleSend() {
+async function handleSend() {
   const text = input.value.trim()
   if (!text || store.isStreaming) return
 
@@ -26,16 +27,35 @@ function handleSend() {
   input.value = ''
   scrollToBottom()
 
-  streamQuery(
-    { query: text, stream: true },
-    (chunk) => {
-      store.appendToLast(chunk)
-      scrollToBottom()
-    },
-    () => {
-      store.isStreaming = false
-    },
-  )
+  try {
+    // Try streaming first; falls back to standard in dev mock
+    streamQuery(
+      { query: text },
+      (chunk) => {
+        store.appendToLast(chunk)
+        scrollToBottom()
+      },
+      () => {
+        store.isStreaming = false
+      },
+    )
+  } catch (err: unknown) {
+    store.isStreaming = false
+    const status = (err as { response?: { status?: number } })?.response?.status
+    if (status === 503) {
+      store.appendToLast('')
+      store.addMessage({
+        role: 'user', // replaced below
+        content: '后端 LLM 服务暂时不可用（503），请稍后重试',
+      })
+      // Override role on the last message to 'system' via direct mutation
+      const msgs = store.messages
+      msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], role: 'assistant', content: '⚠️ 后端 LLM 服务暂时不可用（503），请稍后重试' }
+    } else {
+      store.appendToLast('查询失败，请重试')
+    }
+    scrollToBottom()
+  }
 }
 </script>
 
@@ -49,26 +69,14 @@ function handleSend() {
         <h3>欢迎使用 ChipWise 智能查询</h3>
         <p>输入芯片相关问题，例如：STM32F407 的最大主频是多少？</p>
       </div>
-      <div v-for="(msg, i) in store.messages" :key="i" style="margin-bottom: 16px">
-        <div :style="{ textAlign: msg.role === 'user' ? 'right' : 'left' }">
-          <el-tag :type="msg.role === 'user' ? 'primary' : 'success'" size="small" style="margin-bottom: 4px">
-            {{ msg.role === 'user' ? '我' : 'ChipWise' }}
-          </el-tag>
-          <div
-            :style="{
-              display: 'inline-block',
-              maxWidth: '70%',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              background: msg.role === 'user' ? '#ecf5ff' : '#f0f9eb',
-              textAlign: 'left',
-              whiteSpace: 'pre-wrap',
-            }"
-          >
-            {{ msg.content }}<span v-if="store.isStreaming && i === store.messages.length - 1" class="cursor">▌</span>
-          </div>
-        </div>
-      </div>
+      <MessageBubble
+        v-for="(msg, i) in store.messages"
+        :key="i"
+        :role="msg.role"
+        :content="msg.content"
+        :citations="msg.citations"
+        :loading="store.isStreaming && i === store.messages.length - 1 && msg.role === 'assistant'"
+      />
     </div>
     <div style="padding: 16px; border-top: 1px solid #ebeef5; display: flex; gap: 8px">
       <el-input
@@ -83,12 +91,3 @@ function handleSend() {
     </div>
   </div>
 </template>
-
-<style scoped>
-.cursor {
-  animation: blink 1s step-end infinite;
-}
-@keyframes blink {
-  50% { opacity: 0; }
-}
-</style>

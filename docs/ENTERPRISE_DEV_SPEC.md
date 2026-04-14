@@ -1,11 +1,11 @@
 # ChipWise Enterprise — 芯片数据智能检索与分析平台
 
-## Architecture Design Specification v5.3
+## Architecture Design Specification v5.4
 
 | 属性 | 值 |
 |------|-----|
 | **文档编号** | CW-ARCH-2026-001 |
-| **版本** | 5.3.0 |
+| **版本** | 5.4.0 |
 | **状态** | Approved |
 | **作者** | Enterprise AI Architecture Team |
 | **审批** | CTO Office |
@@ -26,6 +26,7 @@
 | 5.1 | 2026-04-13 | **Phase 7 可插拔切片策略**: BaseChunker 抽象 + 5 种切片策略 + 评估 harness + DEV SPEC §4.3 Step 6 对齐 | Enterprise AI Architecture Team |
 | 5.2 | 2026-04-14 | **生产加固 (Phase 8)**: SSO CSRF state 迁至 Redis (`SSOStateStore`); JIT Provisioner 强制 PG 写入 (移除静默内存降级); LM Studio 后台健康探针 + fast-fail 503 + 自动恢复 | Enterprise AI Architecture Team |
 | 5.3 | 2026-04-14 | **工程加固 + Vue3 前端 (Phase 9)**: ruff/mypy 零错误 + lint.yml CI 门禁; integration_nollm 测试分层; 20 个新单测 (chunking + probe); Vue3 前端脚手架 (Element Plus + Pinia + 4 核心页面); healthcheck --local 模式 | Enterprise AI Architecture Team |
+| 5.4 | 2026-04-15 | **Vue3 前端可用化 (Phase 10)**: API 契约对齐 (documents.ts 路径 bug 修复 + types/api.ts 全量对标 Pydantic); 共享组件抽离 (AppLayout/MessageBubble/CitationCard/LoadingError); 路由守卫 + 401 refresh token 闭环; DocumentsView 真实 API 联调; Vitest 19 测试全绿; frontend.yml CI | Enterprise AI Architecture Team |
 
 ---
 
@@ -417,7 +418,7 @@ llm:
 
 - **Phase 1 (MVP)**: Gradio (:7860)，快速验证
 - **Phase 2 (Production)**: Vue3 + Element Plus，企业级前端
-- **Vue3 现状**: Vue3 工程已创建于 `frontend/web/`，包含 Vite + TypeScript + Element Plus + Pinia + Vue Router，含登录/查询/对比/文档管理四个核心页面。Gradio MVP 保留共存。
+- **Vue3 现状**: Vue3 工程已创建于 `frontend/web/`，包含 Vite + TypeScript + Element Plus + Pinia + Vue Router，含登录/查询/对比/文档管理四个核心页面。Phase 10 完成可用化：API 契约对齐 (types/api.ts 全量对标 Pydantic)；共享组件 (AppLayout/MessageBubble/CitationCard/LoadingError)；路由守卫 + 401 refresh token 重放闭环；DocumentsView 真实 API 联调；Vitest 19 测试全绿；`.github/workflows/frontend.yml` CI 门禁。Gradio MVP 保留共存。
 
 ## 3.7 DevOps 工具链
 
@@ -1417,27 +1418,39 @@ chipwise-enterprise/
 │
 ├── frontend/
 │   ├── gradio_app.py                   # Gradio UI (MVP, :7860): 对话查询 + 文件上传 + Markdown 渲染
-│   ├── web/                            # Vue3 + Element Plus 前端 (Phase 9 实现)
-│   │   ├── package.json                # 依赖: Vue3 / Element Plus / Pinia / Vue Router / Axios
+│   ├── web/                            # Vue3 + Element Plus 前端 (Phase 9 脚手架, Phase 10 可用化)
+│   │   ├── package.json                # 依赖: Vue3 / Element Plus / Pinia / Vue Router / Axios / Vitest
 │   │   ├── vite.config.ts              # Vite 构建配置 (dev proxy → :8080)
+│   │   ├── vitest.config.ts            # Vitest 测试配置 (happy-dom 环境)
 │   │   ├── tsconfig.json
 │   │   ├── src/
 │   │   │   ├── main.ts                 # Vue3 入口
-│   │   │   ├── App.vue
+│   │   │   ├── App.vue                 # 简洁 router-view 容器
 │   │   │   ├── api/                    # API 封装层
-│   │   │   │   ├── client.ts           # Axios 实例 + JWT 拦截器
-│   │   │   │   ├── auth.ts             # 登录/刷新 Token
+│   │   │   │   ├── client.ts           # Axios 实例 + JWT 拦截器 + 401 refresh 重放
+│   │   │   │   ├── auth.ts             # 登录 / SSO / refresh (独立 axios 防递归)
 │   │   │   │   ├── query.ts            # 查询 (含 SSE 流式)
 │   │   │   │   ├── compare.ts          # 芯片对比
-│   │   │   │   └── documents.ts        # 文档上传
+│   │   │   │   └── documents.ts        # 文档上传 / 列表 / 详情
+│   │   │   ├── components/             # 共享组件 (Phase 10)
+│   │   │   │   ├── AppLayout.vue       # 侧栏 + 顶栏 + 嵌套路由布局
+│   │   │   │   ├── MessageBubble.vue   # 聊天气泡 (user/assistant/system)
+│   │   │   │   ├── CitationCard.vue    # 引用卡片 (chunk 摘要 + score)
+│   │   │   │   ├── LoadingError.vue    # 统一 loading/error/empty 状态
+│   │   │   │   └── __tests__/          # Vitest 组件测试 (4 文件, 14 tests)
 │   │   │   ├── stores/                 # Pinia 状态管理
+│   │   │   │   ├── auth.ts             # 认证 store (token + refreshToken + refresh action)
+│   │   │   │   ├── query.ts            # 查询 store (ChatMessage + streaming)
+│   │   │   │   └── __tests__/          # Vitest 状态测试 (1 文件, 5 tests)
+│   │   │   ├── types/
+│   │   │   │   └── api.ts              # TS 类型 (全量对齐 Pydantic: Citation/DocumentMeta/LoginResponse)
 │   │   │   ├── views/
-│   │   │   │   ├── LoginView.vue       # 登录页面
-│   │   │   │   ├── QueryView.vue       # SSE 流式查询
+│   │   │   │   ├── LoginView.vue       # 登录页面 (支持 ?redirect= 回跳)
+│   │   │   │   ├── QueryView.vue       # SSE 流式查询 + MessageBubble + 503 优雅处理
 │   │   │   │   ├── CompareView.vue     # 芯片对比
-│   │   │   │   └── DocumentsView.vue   # 文档管理
+│   │   │   │   └── DocumentsView.vue   # 文档管理 (真实 API + 5s 轮询 + LoadingError)
 │   │   │   └── router/
-│   │   │       └── index.ts
+│   │   │       └── index.ts            # 嵌套路由 (AppLayout) + beforeEach 守卫
 │   │   └── public/
 │   │       └── index.html
 │   └── vue3/                           # Vue3 设计参考 (原始规划, 保留)
