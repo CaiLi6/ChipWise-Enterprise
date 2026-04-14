@@ -1,11 +1,11 @@
 # ChipWise Enterprise — Development Plan
 
-> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.0 中提取的详细开发任务排期。
+> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.1 中提取的详细开发任务排期。
 > 包含各阶段的任务分解、验收标准和测试方法。
 > 架构设计详情请参考 [ENTERPRISE_DEV_SPEC.md](./ENTERPRISE_DEV_SPEC.md)。
-> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.0（2026-04-09 更新，含 §2.9-2.11 新增章节、§3/§5.7 Phase X 标注、§5.2 扩展指标）。
+> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.1（2026-04-14 更新，含 §4.3 Step 6 可插拔切片策略 + 评估框架）。
 
-> **排期原则（严格对齐 ENTERPRISE_DEV_SPEC v5.0 架构分层与 §4.4 目录结构）**
+> **排期原则（严格对齐 ENTERPRISE_DEV_SPEC v5.1 架构分层与 §4.4 目录结构）**
 >
 > - **只按 DEV_SPEC 设计落地**：以 §4.4 目录树为"交付清单"，每一步都在文件系统上产生可见变化。
 > - **Phase 层层递进**：Phase 1 基建 → Phase 2 核心能力 → Phase 3 数据工程 → Phase 4 业务 Tool → Phase 5 高级特性 → Phase 6 前端与交付。后阶段依赖前阶段产出。
@@ -23,7 +23,8 @@
 | **Phase 4** | Structured Query Tools | 芯片对比 / 选型 / BOM 审查三个核心 Tool | 8 |
 | **Phase 5** | Advanced Features | 测试用例 / 设计规则 / 知识沉淀 / 报告导出四组高级 Tool | 9 |
 | **Phase 6** | Frontend & Delivery | Gradio 前端 + SSO + Prometheus/Grafana + 压测 + E2E 验收 + 文档 | 11 |
-| **总计** | | | **78** |
+| **Phase 7** | Chunking Strategies + Evaluation | 可插拔切片策略 + 评估 harness + 文档同步 | 10 |
+| **总计** | | | **88** |
 
 ---
 
@@ -248,7 +249,8 @@
 | Phase 4 | 8 | 8 | 100% |
 | Phase 5 | 9 | 9 | 100% |
 | Phase 6 | 11 | 11 | 100% |
-| **总计** | **78** | **78** | **100%** |
+| Phase 7 | 10 | 10 | 100% |
+| **总计** | **88** | **88** | **100%** |
 
 ---
 
@@ -1431,6 +1433,7 @@ pytest tests/integration/ -q -m integration
   - 超长纯文本段落按 chunk_size 递归切分，overlap 正确重叠。
   - 每个 chunk 含正确的 `section_title` 元数据。
 - **测试方法**：`pytest -q tests/unit/test_datasheet_splitter.py`
+- **v5.1 更新**：Phase 7 (7A1) 中 DatasheetSplitter 已重构为继承 `BaseChunker`，默认参数改从 `settings.yaml` 读取（1000/200），签名变更为 `__init__(chunk_size: int | None = None, chunk_overlap: int | None = None)`。详见 7A1/7A2。
 
 ---
 
@@ -1492,7 +1495,7 @@ pytest tests/integration/ -q -m integration
   - `@shared_task extract_text(doc_info) -> dict`（pdfplumber 全文本提取 → `doc_info["text"]`）
   - `@shared_task extract_tables(doc_info) -> dict`（三级表格提取 → `doc_info["tables"]`，路由到 `"heavy"` 队列）
   - `@shared_task extract_structured_params(doc_info) -> dict`（LLM 参数抽取 → PG `chip_parameters`，time_limit=120）
-  - `@shared_task chunk_text(doc_info) -> dict`（Datasheet 感知分片 → `doc_info["chunks"]`）
+  - `@shared_task chunk_text(doc_info) -> dict`（可插拔分片，默认 DatasheetSplitter，通过 `create_chunker()` 工厂 → `doc_info["chunks"]`）
   - `@shared_task embed_chunks(doc_info) -> dict`（调用 BGE-M3 :8001 → `doc_info["embeddings"]`，路由到 `"embedding"` 队列）
   - `@shared_task store_vectors(doc_info) -> dict`（Milvus upsert → `doc_info["vector_count"]`）
   - `@shared_task store_metadata(doc_info) -> dict`（PG 写入：documents / chips / chip_parameters / design_rules / errata）
@@ -2712,3 +2715,4 @@ locust -f tests/load/locustfile.py --headless \
 | **M4** | Phase 4 完成 | 芯片对比 / 选型 / BOM 审查三个 Tool 可通过 Agent 自动调用 | 3 个业务 Tool + 对应 API 端点 |
 | **M5** | Phase 5 完成 | 全部 10 个 Agent Tools 就绪 + 报告可导出 | 4 个高级 Tool + ReportEngine |
 | **M6** | Phase 6 完成 | 系统正式上线：Gradio 前端 + SSO + 压测通过 + 文档齐全 | Gradio MVP + SSO + E2E 全绿 + 运维文档 + 用户手册 |
+| **M7** | Phase 7 完成 | 切片策略可插拔 + 评估 harness 可用 + DEV SPEC v5.1 同步 | BaseChunker + 5 策略 + evaluation/chunking/ + 文档对齐 |
