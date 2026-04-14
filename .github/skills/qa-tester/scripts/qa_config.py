@@ -15,6 +15,10 @@ Profiles:
     invalid_llm        LLM base_url → unreachable endpoint
     invalid_embed      Embedding base_url → unreachable endpoint
     high_concurrency   Raise rate limits + agent.max_iterations
+    chunking_fine      Switch chunking strategy to fine-grained (256 chars)
+    chunking_coarse    Switch chunking strategy to coarse-grained (2048 chars)
+    chunking_parent_child  Switch chunking strategy to parent-child
+    chunking_semantic  Switch chunking strategy to semantic
 """
 
 import argparse
@@ -136,6 +140,38 @@ def apply_high_concurrency(settings: dict) -> dict:
     return settings
 
 
+def apply_chunking_fine(settings: dict) -> dict:
+    """Switch chunking strategy to fine-grained (256 chars)."""
+    chunking = _ensure_section(settings, "ingestion", "chunking")
+    chunking["strategy"] = "fine"
+    print("   Chunking strategy -> fine (256 chars)")
+    return settings
+
+
+def apply_chunking_coarse(settings: dict) -> dict:
+    """Switch chunking strategy to coarse-grained (2048 chars)."""
+    chunking = _ensure_section(settings, "ingestion", "chunking")
+    chunking["strategy"] = "coarse"
+    print("   Chunking strategy -> coarse (2048 chars)")
+    return settings
+
+
+def apply_chunking_parent_child(settings: dict) -> dict:
+    """Switch chunking strategy to parent-child (child 256, parent 2048)."""
+    chunking = _ensure_section(settings, "ingestion", "chunking")
+    chunking["strategy"] = "parent_child"
+    print("   Chunking strategy -> parent_child")
+    return settings
+
+
+def apply_chunking_semantic(settings: dict) -> dict:
+    """Switch chunking strategy to semantic (embedding breakpoint detection)."""
+    chunking = _ensure_section(settings, "ingestion", "chunking")
+    chunking["strategy"] = "semantic"
+    print("   Chunking strategy -> semantic")
+    return settings
+
+
 PROFILES = {
     "default": apply_default,
     "small_model": apply_small_model,
@@ -144,6 +180,10 @@ PROFILES = {
     "invalid_llm": apply_invalid_llm,
     "invalid_embed": apply_invalid_embed,
     "high_concurrency": apply_high_concurrency,
+    "chunking_fine": apply_chunking_fine,
+    "chunking_coarse": apply_chunking_coarse,
+    "chunking_parent_child": apply_chunking_parent_child,
+    "chunking_semantic": apply_chunking_semantic,
 }
 
 
@@ -198,6 +238,10 @@ def cmd_check() -> None:
     # Agent
     agent = settings.get("agent", {})
     print(f"   Agent:        max_iterations={agent.get('max_iterations', '?')}")
+
+    # Chunking
+    chunking = settings.get("ingestion", {}).get("chunking", {})
+    print(f"   Chunking:     strategy={chunking.get('strategy', 'datasheet')}, chunk_size={chunking.get('chunk_size', '?')}")
 
     print(f"\n   Backup: {'exists' if SETTINGS_BACKUP.exists() else 'none'}")
 

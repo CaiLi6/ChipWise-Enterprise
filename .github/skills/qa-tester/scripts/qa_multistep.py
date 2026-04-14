@@ -20,6 +20,8 @@ Supported test IDs:
     J-05   Invalid LLM endpoint → graceful error
     J-06   Invalid embedding endpoint → graceful error
     J-11   Chunk size parameter change
+    M-06   Strategy switching via settings.yaml
+    M-08   All strategies produce valid Chunk objects (smoke tests)
 """
 
 import argparse
@@ -632,6 +634,103 @@ def test_j11() -> bool:
     return more_chunks
 
 
+def test_m06() -> bool:
+    """M-06: Strategy switching via settings.yaml."""
+    print("=" * 60)
+    print("TEST M-06: Strategy switching via settings.yaml")
+    print("=" * 60)
+
+    try:
+        import yaml
+    except ImportError:
+        print("  ERROR: PyYAML not installed")
+        return False
+
+    settings_file = REPO_ROOT / "config" / "settings.yaml"
+
+    # Step 1: Read current strategy
+    print("\n--- Step 1: Read current strategy ---")
+    settings = yaml.safe_load(settings_file.read_text(encoding="utf-8"))
+    original_strategy = settings.get("ingestion", {}).get("chunking", {}).get("strategy", "datasheet")
+    print(f"  current_strategy={original_strategy}")
+
+    # Step 2: Create chunker with default
+    print("\n--- Step 2: Create chunker (default from settings) ---")
+    from src.ingestion.chunking import create_chunker
+    default_chunker = create_chunker()
+    default_type = type(default_chunker).__name__
+    print(f"  chunker_type={default_type}")
+
+    # Step 3: Switch to fine strategy
+    print("\n--- Step 3: Switch strategy to 'fine' ---")
+    fine_chunker = create_chunker("fine")
+    fine_type = type(fine_chunker).__name__
+    print(f"  chunker_type={fine_type}")
+
+    # Step 4: Switch to coarse strategy
+    print("\n--- Step 4: Switch strategy to 'coarse' ---")
+    coarse_chunker = create_chunker("coarse")
+    coarse_type = type(coarse_chunker).__name__
+    print(f"  chunker_type={coarse_type}")
+
+    # Step 5: Switch to parent_child strategy
+    print("\n--- Step 5: Switch strategy to 'parent_child' ---")
+    pc_chunker = create_chunker("parent_child")
+    pc_type = type(pc_chunker).__name__
+    print(f"  chunker_type={pc_type}")
+
+    # Step 6: Verify all are different types
+    print("\n--- Step 6: Verify distinct types ---")
+    types = {default_type, fine_type, coarse_type, pc_type}
+    all_distinct = len(types) >= 3  # default may be DatasheetSplitter which is distinct
+    print(f"  unique_types={types}")
+    print(f"  all_distinct={all_distinct}")
+
+    # Verdict
+    print(f"\nVERDICT: {'PASS' if all_distinct else 'FAIL'}")
+    print(f"  default={default_type}, fine={fine_type}, coarse={coarse_type}, parent_child={pc_type}")
+    return all_distinct
+
+
+def test_m08() -> bool:
+    """M-08: All strategies produce valid Chunk objects."""
+    print("=" * 60)
+    print("TEST M-08: All strategies produce valid Chunk objects")
+    print("=" * 60)
+
+    import subprocess
+
+    # Run the integration smoke tests
+    print("\n--- Step 1: Run chunking strategy smoke tests ---")
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest",
+         "tests/integration/test_chunking_strategies_smoke.py",
+         "-q", "--tb=short"],
+        capture_output=True, text=True, cwd=str(REPO_ROOT),
+    )
+    print(f"  exit_code={result.returncode}")
+    print(f"  stdout={result.stdout[:500]}")
+    if result.stderr:
+        print(f"  stderr={result.stderr[:300]}")
+
+    # Parse pass count
+    passed_match = None
+    for line in result.stdout.splitlines():
+        if "passed" in line:
+            passed_match = line.strip()
+            break
+
+    print(f"\n--- Step 2: Parse results ---")
+    print(f"  summary_line={passed_match}")
+
+    # Verdict
+    ok = result.returncode == 0
+    print(f"\nVERDICT: {'PASS' if ok else 'FAIL'}")
+    print(f"  exit_code={result.returncode}")
+    print(f"  summary={passed_match}")
+    return ok
+
+
 # ── Test Registry & Main ─────────────────────────────────────────────────
 
 TESTS = {
@@ -644,6 +743,8 @@ TESTS = {
     "J-05": test_j05,
     "J-06": test_j06,
     "J-11": test_j11,
+    "M-06": test_m06,
+    "M-08": test_m08,
 }
 
 

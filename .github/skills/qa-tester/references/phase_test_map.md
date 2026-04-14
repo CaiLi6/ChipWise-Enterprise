@@ -10,6 +10,7 @@ Maps ChipWise Enterprise development phases to which QA test sections become exe
 | **4** | 8-10 | 4A1-4C3 (8 tasks) | **D** extended (chip_compare, chip_select, bom_review tools), **K-05** (BOM lifecycle) | A-H, J*, K, L* |
 | **5** | 11-13 | 5A1-5D2 (9 tasks) | **D** extended (test_case_gen, design_rule_check, knowledge_search, report_export), **L** (full metrics with real data) | A-H, J*, K, L |
 | **6** | 14-16 | 6A1-6D3 (11 tasks) | **I** (Gradio Frontend), **C** extended (SSO/OIDC), **J** (full config + fault tolerance) | A-L (all) |
+| **7** | 17-18 | 7A1-7C1 (10 tasks) | **M** (Chunking Strategies & Evaluation), **J-11** extended (strategy switching), **L** extended (chunking eval metrics) | A-M (all) |
 
 `*` = partial coverage; some tests in that section require later phases.
 
@@ -36,3 +37,4 @@ Maps ChipWise Enterprise development phases to which QA test sections become exe
 | J | Settings file | `src/core/settings.py`, `config/settings.yaml` |
 | K | Full infra + Celery | Same as G + F |
 | L | Full infra + golden test set | `tests/fixtures/golden_test_set.json`, evaluation scripts |
+| M | Python venv (no live services needed) | `src/ingestion/chunking/`, `evaluation/chunking/`, `tests/fixtures/golden_retrieval_qrels.jsonl` |

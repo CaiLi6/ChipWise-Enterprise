@@ -53,8 +53,8 @@ Optional modifiers: append section letter (`run QA B`) or test ID (`run QA B-01`
 7. Only NOW return to step 1
 ```
 
-> **Environment**: Primary dev on **Windows** (AMD Ryzen AI 395). Use PowerShell syntax by default.
-> Activate `.venv` before any `python` command: `.\.venv\Scripts\Activate.ps1`
+> **Environment**: Primary dev on **Linux** (AMD Ryzen AI 395). Use Bash syntax.
+> Activate `.venv` before any `python` command: `source .venv/bin/activate`
 
 ---
 
@@ -64,7 +64,7 @@ Optional modifiers: append section letter (`run QA B`) or test ID (`run QA B-01`
 2. Read `.github/skills/qa-tester/QA_TEST_PROGRESS.md` for current status and phase.
 3. User-specified section/ID → scope to that. Otherwise → first ⬜ pending test.
 4. If any 🔧 tests exist, re-test those first.
-5. Execute in section order (A→L), within section in ID order.
+5. Execute in section order (A→M), within section in ID order.
 6. **Phase gating**: Check `Current Phase` in progress header. Skip tests whose Phase > current phase — mark ⏭️ with note `[SKIP] Phase N not yet implemented`.
 
 ### Test Categories
@@ -83,6 +83,7 @@ Optional modifiers: append section letter (`run QA B`) or test ID (`run QA B-01`
 | J | Config & Fault Tolerance | `qa_config.py` profile switches → run tests → restore |
 | K | Data Lifecycle | `qa_multistep.py <TEST_ID>` for multi-step flows |
 | L | RAG Quality | Golden test set evaluation, compute Hit Rate/NDCG/MRR |
+| M | Chunking & Evaluation | Pluggable chunking factory, strategy switching, evaluation harness |
 
 See [references/phase_test_map.md](references/phase_test_map.md) for which sections are testable at each dev phase.
 
@@ -154,6 +155,14 @@ The script executes every sub-step, prints ACTUAL values at each step, outputs `
 2. Run command from test plan.
 3. Verify error handling / graceful degradation.
 4. Restore: `python .github/skills/qa-tester/scripts/qa_config.py restore`
+
+### Chunking & Evaluation Tests (M)
+
+1. Verify chunking factory creates correct strategy from settings.yaml.
+2. Test each strategy (datasheet, fine, coarse, parent_child, semantic) produces valid chunks.
+3. Run evaluation harness smoke tests: `python -m pytest tests/integration/test_chunking_strategies_smoke.py -q`
+4. Verify strategy switching via `ingestion.chunking.strategy` in settings.yaml.
+5. For multi-step evaluation tests, use `qa_multistep.py <TEST_ID>`.
 
 ---
 
@@ -229,8 +238,12 @@ Re-execute any flagged test. Do NOT proceed until 0 flags.
 | `src/api/main.py` | FastAPI application entry point |
 | `src/agent/orchestrator.py` | Agent ReAct loop |
 | `src/ingestion/tasks.py` | Celery ingestion task chain |
+| `src/ingestion/chunking/factory.py` | Pluggable chunking strategy factory |
+| `src/ingestion/chunking/base.py` | BaseChunker ABC for all strategies |
+| `evaluation/chunking/runner.py` | CLI runner for chunking evaluation harness |
 | `tests/fixtures/sample_documents/` | Test chip datasheets |
 | `tests/fixtures/golden_test_set.json` | RAG evaluation golden set (100+ QA pairs) |
+| `tests/fixtures/golden_retrieval_qrels.jsonl` | Retrieval qrels for chunking evaluation |
 
 ## Service Ports
 

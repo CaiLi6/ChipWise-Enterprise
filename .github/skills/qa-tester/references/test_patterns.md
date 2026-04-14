@@ -286,3 +286,96 @@ resp = httpx.post(
 )
 print(f"predict: status={resp.status_code}, response_length={len(resp.json().get('data', [''])[0])}")
 ```
+
+---
+
+## Chunking Strategy Verification
+
+```python
+import sys
+sys.path.insert(0, ".")
+
+from src.ingestion.chunking import create_chunker
+from src.ingestion.chunking.base import BaseChunker
+
+# Default strategy (datasheet)
+chunker = create_chunker()
+print(f"default: type={type(chunker).__name__}, isinstance={isinstance(chunker, BaseChunker)}")
+
+# Fine-grained strategy
+fine = create_chunker("fine")
+print(f"fine: type={type(fine).__name__}, chunk_size={fine.chunk_size}")
+
+# Coarse strategy
+coarse = create_chunker("coarse")
+print(f"coarse: type={type(coarse).__name__}, chunk_size={coarse.chunk_size}")
+
+# Parent-child strategy
+pc = create_chunker("parent_child")
+print(f"parent_child: type={type(pc).__name__}")
+
+# Semantic strategy
+sem = create_chunker("semantic")
+print(f"semantic: type={type(sem).__name__}")
+
+# Chunk sample text
+sample = "This is a test paragraph. " * 100
+chunks = chunker.chunk(sample)
+print(f"chunks_count={len(chunks)}, first_chunk_len={len(chunks[0].text) if chunks else 0}")
+for i, c in enumerate(chunks[:3]):
+    print(f"  chunk[{i}]: index={c.index}, len={len(c.text)}")
+```
+
+---
+
+## Chunking Evaluation Harness
+
+```python
+import sys
+sys.path.insert(0, ".")
+
+# Verify all modules import
+from evaluation.chunking import runner, metrics, corpus, retriever, report
+print("imports: runner=OK, metrics=OK, corpus=OK, retriever=OK, report=OK")
+
+# Verify golden qrels file
+import json
+from pathlib import Path
+
+qrels_file = Path("tests/fixtures/golden_retrieval_qrels.jsonl")
+entries = [json.loads(line) for line in qrels_file.read_text().strip().splitlines()]
+print(f"qrels: entries={len(entries)}")
+for e in entries[:3]:
+    print(f"  query_id={e.get('query_id')}, query={e.get('query', '')[:50]}")
+```
+
+```bash
+# Run chunking strategy smoke tests
+python -m pytest tests/integration/test_chunking_strategies_smoke.py -q --tb=short
+
+# Run evaluation harness (dry run, no live services)
+python -m evaluation.chunking.runner --help
+```
+
+---
+
+## Strategy Switching via Settings
+
+```python
+import sys, yaml
+sys.path.insert(0, ".")
+
+# Read current strategy
+settings = yaml.safe_load(open("config/settings.yaml").read())
+current = settings.get("ingestion", {}).get("chunking", {}).get("strategy", "datasheet")
+print(f"current_strategy={current}")
+
+# Temporarily switch to fine
+settings["ingestion"]["chunking"]["strategy"] = "fine"
+from src.ingestion.chunking import create_chunker
+fine = create_chunker("fine")
+print(f"switched_to: type={type(fine).__name__}")
+
+# Restore
+settings["ingestion"]["chunking"]["strategy"] = current
+```

@@ -2,11 +2,11 @@
 
 > Generated: 2026-04-10
 
-> Current Phase: 3
+> Current Phase: 7
 
-> Total: 140 test cases
+> Total: 150 test cases
 
-> ✅ Pass: 63 | ❌ Fail: 0 | ⏭️ Skip: 77 | 🔧 Fix: 0 | ⬜ Pending: 0
+> ✅ Pass: 63 | ❌ Fail: 0 | ⏭️ Skip: 77 | 🔧 Fix: 0 | ⬜ Pending: 10
 
 
 <!-- STATUS LEGEND: ⬜ pending | ✅ pass | ❌ fail | ⏭️ skip | 🔧 fix (needs re-test) -->
@@ -246,3 +246,21 @@
 | ⏭️ | L-06 | Faithfulness ≥ 90% | [SKIP] Requires live LLM + Baseline data |
 | ⏭️ | L-07 | Tool Selection Accuracy ≥ 90% | [SKIP] Requires live LLM + annotated queries |
 | ⏭️ | L-08 | Graph Query Hit Rate ≥ 85% | [SKIP] Requires Baseline state with graph data |
+
+
+## M. Chunking Strategies & Evaluation
+
+> ✅ Pass: 0 | ❌ Fail: 0 | ⏭️ Skip: 0 | 🔧 Fix: 0 | ⬜ Pending: 10
+
+| Status | ID | Title | Note |
+|--------|----|-------|------|
+| ⬜ | M-01 | Chunking factory creates default strategy | |
+| ⬜ | M-02 | Chunking factory creates fine strategy | |
+| ⬜ | M-03 | Chunking factory creates coarse strategy | |
+| ⬜ | M-04 | Chunking factory creates parent_child strategy | |
+| ⬜ | M-05 | Chunking factory creates semantic strategy | |
+| ⬜ | M-06 | Strategy switching via settings.yaml | |
+| ⬜ | M-07 | DatasheetSplitter reads settings defaults | |
+| ⬜ | M-08 | All strategies produce valid Chunk objects | |
+| ⬜ | M-09 | Evaluation harness modules import | |
+| ⬜ | M-10 | Golden retrieval qrels file exists | |

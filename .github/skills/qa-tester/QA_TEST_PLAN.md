@@ -282,3 +282,22 @@
 | L-06 | Faithfulness ≥ 90% | 2D | Baseline | Check 20 random answers for hallucinated parameters | ≥90% of answers cite only parameters present in source |
 | L-07 | Tool Selection Accuracy ≥ 90% | 2C | Baseline | Run 50 annotated queries, check tool selection in trace | ≥90% of queries select correct tool |
 | L-08 | Graph Query Hit Rate ≥ 85% | 2B | Baseline | Run 20 alternatives/errata queries against Kùzu | ≥85% return relevant graph data |
+
+---
+
+## M. Chunking Strategies & Evaluation
+
+> **Phase**: 7A-7C | **Required State**: Various | **Tests**: 10
+
+| ID | Title | Phase | State | Steps | Expected Result |
+|----|-------|-------|-------|-------|-----------------|
+| M-01 | Chunking factory creates default strategy | 7A | Any | Python: `from src.ingestion.chunking import create_chunker; c = create_chunker()` | Returns DatasheetSplitter instance (default strategy) |
+| M-02 | Chunking factory creates fine strategy | 7A | Any | Python: `create_chunker("fine")` | Returns FineGrainedChunker with chunk_size ~256 |
+| M-03 | Chunking factory creates coarse strategy | 7A | Any | Python: `create_chunker("coarse")` | Returns CoarseGrainedChunker with chunk_size ~2048 |
+| M-04 | Chunking factory creates parent_child strategy | 7A | Any | Python: `create_chunker("parent_child")` | Returns ParentChildChunker, produces chunks with parent_id references |
+| M-05 | Chunking factory creates semantic strategy | 7A | Any | Python: `create_chunker("semantic")` | Returns SemanticChunker (falls back to size-based if BGE-M3 unavailable) |
+| M-06 | Strategy switching via settings.yaml | 7A | Any | Change `ingestion.chunking.strategy` to "fine" → `create_chunker()` | Returns FineGrainedChunker (reads from settings) |
+| M-07 | DatasheetSplitter reads settings defaults | 7A | Any | Python: `DatasheetSplitter()` without args → check chunk_size | Uses settings.yaml values (1000/200), not hardcoded 1024/128 |
+| M-08 | All strategies produce valid Chunk objects | 7A | Any | Run `pytest tests/integration/test_chunking_strategies_smoke.py -q` | All 12 smoke tests pass |
+| M-09 | Evaluation harness modules import | 7B | Any | Python: `from evaluation.chunking import runner, metrics, corpus, retriever` | All modules import without error |
+| M-10 | Golden retrieval qrels file exists | 7B | Any | Check `tests/fixtures/golden_retrieval_qrels.jsonl` exists and has valid JSONL | File exists, ≥3 entries, each has query_id, query, relevant_chunk_ids fields |
