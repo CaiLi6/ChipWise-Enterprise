@@ -53,12 +53,12 @@ python scripts/healthcheck.py
 pytest -q                                        # All tests
 pytest -q tests/unit/test_settings.py            # Single file
 pytest -q -m unit                                # Unit only (no Docker)
-pytest -q -m integration                         # Requires Docker infra
+pytest -q -m integration_nollm          # Docker infra only (no LM Studio)
 pytest -q tests/unit/test_smoke_imports.py       # Fast import smoke check
 python -m compileall src                         # Syntax check
 ```
 
-Markers: `unit`, `integration`, `e2e`, `load`. `asyncio_mode = "auto"` (pytest-asyncio) — async tests need no decorator. Integration tests assume Docker services are healthy. Load tests use `tests/load/locustfile.py`.
+Markers: `unit`, `integration`, `integration_nollm`, `e2e`, `load`. `asyncio_mode = "auto"` (pytest-asyncio) — async tests need no decorator. Integration tests assume Docker services are healthy. `integration_nollm` tests are runnable with only PG/Milvus/Redis/Kùzu (no LM Studio). Load tests use `tests/load/locustfile.py`.
 
 **FastAPI unit tests** use `app.dependency_overrides` to mock auth and the orchestrator without a real JWT or LM Studio:
 ```python
@@ -81,7 +81,7 @@ All code must pass `ruff check` and `mypy` before committing.
 
 | Layer | Components |
 |-------|-----------|
-| 1 Frontend | Gradio MVP (`frontend/`) → Vue3 + Element Plus (production) |
+| 1 Frontend | Gradio MVP (`frontend/gradio_app.py`) + Vue3 (`frontend/web/`: Vite + Element Plus + Pinia) |
 | 2 API Gateway | FastAPI :8080 — JWT, rate limiting, CORS, request tracing |
 | 3 Agent Orchestrator | ReAct loop (max 5 iterations), LLM-driven tool selection |
 | 4 Core Services | QueryRewriter, ConversationManager, ResponseBuilder, ReportEngine |
@@ -154,7 +154,7 @@ BGE-M3 produces dense (1024-dim) + sparse vectors in one call. Use `collection.h
 
 ### SSO/OIDC Authentication (`src/auth/sso/`)
 
-Three providers: `KeycloakProvider`, `DingTalkProvider`, `FeishuProvider` — all inherit `BaseSSOProvider`. CSRF state stored in-memory (`_STATE_STORE` dict, 600s TTL; use Redis in production). `JITProvisioner` creates/updates local users on first login with priority-based role mapping (admin > user > viewer). Flow: `/login` → IdP redirect (state+nonce) → `/callback` → code exchange → JIT provision → issue ChipWise JWT.
+Three providers: `KeycloakProvider`, `DingTalkProvider`, `FeishuProvider` — all inherit `BaseSSOProvider`. CSRF state stored in Redis via `SSOStateStore` (SETEX TTL=600, GETDEL with fallback). `JITProvisioner` creates/updates local users in PostgreSQL on first login with priority-based role mapping (admin > user > viewer). Flow: `/login` → IdP redirect (state+nonce) → `/callback` → code exchange → JIT provision → issue ChipWise JWT.
 
 ### TraceContext
 

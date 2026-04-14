@@ -1,11 +1,11 @@
 # ChipWise Enterprise — Development Plan
 
-> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.2 中提取的详细开发任务排期。
+> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.3 中提取的详细开发任务排期。
 > 包含各阶段的任务分解、验收标准和测试方法。
 > 架构设计详情请参考 [ENTERPRISE_DEV_SPEC.md](./ENTERPRISE_DEV_SPEC.md)。
-> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.2（2026-04-14 更新，含生产加固 Phase 8: Redis CSRF state / JIT→PG / LM Studio 健康探针）。
+> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.3（2026-04-14 更新，含工程加固 + Vue3 前端 Phase 9）。
 
-> **排期原则（严格对齐 ENTERPRISE_DEV_SPEC v5.2 架构分层与 §4.4 目录结构）**
+> **排期原则（严格对齐 ENTERPRISE_DEV_SPEC v5.3 架构分层与 §4.4 目录结构）**
 >
 > - **只按 DEV_SPEC 设计落地**：以 §4.4 目录树为"交付清单"，每一步都在文件系统上产生可见变化。
 > - **Phase 层层递进**：Phase 1 基建 → Phase 2 核心能力 → Phase 3 数据工程 → Phase 4 业务 Tool → Phase 5 高级特性 → Phase 6 前端与交付。后阶段依赖前阶段产出。
@@ -25,7 +25,8 @@
 | **Phase 6** | Frontend & Delivery | Gradio 前端 + SSO + Prometheus/Grafana + 压测 + E2E 验收 + 文档 | 11 |
 | **Phase 7** | Chunking Strategies + Evaluation | 可插拔切片策略 + 评估 harness + 文档同步 | 10 |
 | **Phase 8** | Production Hardening | SSO CSRF→Redis / JIT→PG强制 / LM Studio 健康探针 | 3 |
-| **总计** | | | **91** |
+| **Phase 9** | Engineering Hardening + Vue3 | ruff/mypy 零化 + 测试分层 + Vue3 前端脚手架 | 5 |
+| **总计** | | | **96** |
 
 ---
 
@@ -248,6 +249,16 @@
 | 8B | JIT Provisioner 强制 PG 写入 (移除静默内存降级) | [x] | 2026-04-14 | `sso_provider` 字段写入; PG 错误向上传播 |
 | 8C | LM Studio 后台健康探针 + fast-fail + 自动恢复 | [x] | 2026-04-14 | `lmstudio_probe.py` 每 15s 探测; 恢复时自动重建 Orchestrator |
 
+#### Phase 9：Engineering Hardening + Vue3
+
+| 任务编号 | 任务名称 | 状态 | 完成日期 | 备注 |
+|---------|---------|------|---------|------|
+| 9A | Lint/Type 零化 (ruff + mypy) + CI 门禁 | [x] | 2026-04-14 | ruff 277 issues / mypy 123 errors 清零; `.github/workflows/lint.yml` |
+| 9B | integration_nollm 测试分层 + Alembic 双向测试 | [x] | 2026-04-14 | 6 个测试标记 integration_nollm; 3 个 Alembic 双向迁移测试 |
+| 9C | 单测补齐 (chunking + probe) | [x] | 2026-04-14 | 20 新单测: semantic_chunker(4) + parent_child_chunker(4) + lmstudio_probe(4) + chunking_factory(8) |
+| 9D | Vue3 前端脚手架 (4 核心页面) | [x] | 2026-04-14 | `frontend/web/`: Vite + Vue3 + TS + Element Plus + Pinia; LoginView/QueryView/CompareView/DocumentsView |
+| 9E | 配置与脚本友好化 | [x] | 2026-04-14 | .env.example VITE_API_BASE_URL; docker-compose.override; healthcheck --local; LOCAL_DEVELOPMENT.md |
+
 ### 📈 总体进度
 
 | Phase | 总任务数 | 已完成 | 进度 |
@@ -260,7 +271,8 @@
 | Phase 6 | 11 | 11 | 100% |
 | Phase 7 | 10 | 10 | 100% |
 | Phase 8 | 3 | 3 | 100% |
-| **总计** | **91** | **91** | **100%** |
+| Phase 9 | 5 | 5 | 100% |
+| **总计** | **96** | **96** | **100%** |
 
 ---
 
@@ -2727,6 +2739,7 @@ locust -f tests/load/locustfile.py --headless \
 | **M6** | Phase 6 完成 | 系统正式上线：Gradio 前端 + SSO + 压测通过 + 文档齐全 | Gradio MVP + SSO + E2E 全绿 + 运维文档 + 用户手册 |
 | **M7** | Phase 7 完成 | 切片策略可插拔 + 评估 harness 可用 + DEV SPEC v5.1 同步 | BaseChunker + 5 策略 + evaluation/chunking/ + 文档对齐 |
 | **M8** | Phase 8 完成 | 多 Worker 安全 + 数据强一致性 + LM Studio 健康可观测 | Redis CSRF state + PG-only JIT + lmstudio_probe + DEV SPEC v5.2 |
+| **M9** | Phase 9 完成 | 零 lint/type 错误 + 测试分层 + Vue3 前端可用 + 本地开发友好 | lint.yml CI + integration_nollm + 20 新单测 + frontend/web/ + healthcheck --local + DEV SPEC v5.3 |
 
 ---
 
@@ -2785,3 +2798,89 @@ locust -f tests/load/locustfile.py --headless \
   - LM Studio 不可用时 `/query` 返回 503，`detail` 包含有意义的错误信息。
   - LM Studio 恢复后下一次 readiness 检查将 `healthy=True`，Orchestrator 自动重建。
   - 全部 9 个健康测试通过。
+
+---
+
+## Phase 9: Engineering Hardening + Vue3 Frontend (2026-04-14)
+
+> 工程加固 + Vue3 前端脚手架。ruff/mypy 零错误 CI 门禁 + 测试分层 + 单测补齐 + Vue3 前端 + 本地开发友好化。对应 DEV SPEC v5.3。
+
+| 任务号 | 名称 | 状态 | 完成日期 | 备注 |
+|--------|------|------|---------|------|
+| 9A | Lint/Type 零化 + CI 门禁 | [x] | 2026-04-14 | |
+| 9B | integration_nollm 测试分层 + Alembic 双向测试 | [x] | 2026-04-14 | |
+| 9C | 单测补齐 (chunking + probe) | [x] | 2026-04-14 | |
+| 9D | Vue3 前端脚手架 | [x] | 2026-04-14 | |
+| 9E | 配置与脚本友好化 | [x] | 2026-04-14 | |
+
+---
+
+### 9A：Lint/Type 零化 (ruff + mypy) + CI 门禁
+- **目标**：`ruff check src tests` → 0 errors、`mypy src` → 0 errors；新增 GitHub Actions lint 门禁。
+- **修改/创建文件**：
+  - 34 个源文件 lint/type 修复 (277 ruff issues + 123 mypy errors)
+  - `.github/workflows/lint.yml`（新建）— ruff check + mypy，PR 必过
+- **验收标准**：
+  - `ruff check src tests` 退出码 0。
+  - `mypy src` 退出码 0。
+  - `.github/workflows/lint.yml` 配置正确，push/PR 触发。
+- **测试方法**：`ruff check src tests && mypy src`
+
+---
+
+### 9B：integration_nollm 测试分层 + Alembic 双向测试
+- **目标**：新增 `integration_nollm` pytest marker，标记无需 LM Studio 的集成测试；新增 Alembic 双向迁移测试。
+- **修改/创建文件**：
+  - `pyproject.toml` — 新增 `integration_nollm` marker 定义
+  - 6 个已有集成测试添加 `@pytest.mark.integration_nollm` 标记
+  - `tests/integration/test_alembic_bidirectional.py`（新建）— 3 个测试: upgrade→downgrade→re-upgrade
+- **验收标准**：
+  - `pytest -q -m integration_nollm` 可独立运行，不依赖 LM Studio。
+  - Alembic 双向迁移测试通过（upgrade → downgrade → re-upgrade 幂等）。
+- **测试方法**：`pytest -q -m integration_nollm` + `pytest -q tests/integration/test_alembic_bidirectional.py`
+
+---
+
+### 9C：单测补齐 (semantic_chunker + parent_child_chunker + lmstudio_probe + chunking_factory)
+- **目标**：为 Phase 7/8 新增模块补齐单元测试，测试总数达 693。
+- **修改/创建文件**：
+  - `tests/unit/test_semantic_chunker.py`（新建）— 4 个测试
+  - `tests/unit/test_parent_child_chunker.py`（新建）— 4 个测试
+  - `tests/unit/test_lmstudio_probe.py`（新建）— 4 个测试
+  - `tests/unit/test_chunking_factory.py`（新建）— 8 个测试
+- **验收标准**：
+  - 20 个新单测全部通过。
+  - `pytest -q -m unit` 总数 ≥ 693。
+- **测试方法**：`pytest -q tests/unit/test_semantic_chunker.py tests/unit/test_parent_child_chunker.py tests/unit/test_lmstudio_probe.py tests/unit/test_chunking_factory.py`
+
+---
+
+### 9D：Vue3 前端脚手架 (4 核心页面 + API 封装 + mock 模式)
+- **目标**：创建 Vue3 + Vite + TypeScript + Element Plus + Pinia + Vue Router 前端工程，含 4 个核心页面，dev 模式支持 mock 数据。
+- **修改/创建文件**：
+  - `frontend/web/`（新建目录）— 完整 Vue3 工程
+  - `frontend/web/src/views/LoginView.vue` — 登录页面
+  - `frontend/web/src/views/QueryView.vue` — SSE 流式查询页面
+  - `frontend/web/src/views/CompareView.vue` — 芯片对比页面
+  - `frontend/web/src/views/DocumentsView.vue` — 文档管理页面
+  - `frontend/web/src/api/client.ts` — Axios 实例 + JWT 拦截器
+  - `frontend/web/src/api/auth.ts` / `query.ts` / `compare.ts` / `documents.ts` — API 模块
+- **验收标准**：
+  - `cd frontend/web && npm run build` 退出码 0。
+  - 4 个核心页面均可渲染（dev 模式 mock 数据）。
+  - Gradio MVP (`frontend/gradio_app.py`) 保留共存。
+- **测试方法**：`cd frontend/web && npm run build`
+
+---
+
+### 9E：配置与脚本友好化
+- **目标**：提升本地开发体验：环境变量模板、Docker Compose 覆盖模板、healthcheck 本地模式、本地开发文档。
+- **修改/创建文件**：
+  - `.env.example` — 新增 `VITE_API_BASE_URL`
+  - `docker-compose.override.yml.example`（新建）— 本地开发端口映射 + Attu UI
+  - `scripts/healthcheck.py` — 新增 `--local` 参数，跳过 LM Studio/Embedding/Reranker 检查
+  - `docs/LOCAL_DEVELOPMENT.md`（新建）— 本地开发完整指南
+- **验收标准**：
+  - `python scripts/healthcheck.py --local` 在仅 Docker 基础设施运行时通过。
+  - `docs/LOCAL_DEVELOPMENT.md` 包含从零开始的本地开发步骤。
+- **测试方法**：`python scripts/healthcheck.py --local`

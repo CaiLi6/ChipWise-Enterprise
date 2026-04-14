@@ -1,11 +1,11 @@
 # ChipWise Enterprise — 芯片数据智能检索与分析平台
 
-## Architecture Design Specification v5.1
+## Architecture Design Specification v5.3
 
 | 属性 | 值 |
 |------|-----|
 | **文档编号** | CW-ARCH-2026-001 |
-| **版本** | 5.2.0 |
+| **版本** | 5.3.0 |
 | **状态** | Approved |
 | **作者** | Enterprise AI Architecture Team |
 | **审批** | CTO Office |
@@ -25,6 +25,7 @@
 | 5.0 | 2026-04-08 | **文档重构**: 按 7 章中文标题重新组织; 新增「核心特点」概览章; 精简冗余代码; 保留全部架构图与关键表格 | Enterprise AI Architecture Team |
 | 5.1 | 2026-04-13 | **Phase 7 可插拔切片策略**: BaseChunker 抽象 + 5 种切片策略 + 评估 harness + DEV SPEC §4.3 Step 6 对齐 | Enterprise AI Architecture Team |
 | 5.2 | 2026-04-14 | **生产加固 (Phase 8)**: SSO CSRF state 迁至 Redis (`SSOStateStore`); JIT Provisioner 强制 PG 写入 (移除静默内存降级); LM Studio 后台健康探针 + fast-fail 503 + 自动恢复 | Enterprise AI Architecture Team |
+| 5.3 | 2026-04-14 | **工程加固 + Vue3 前端 (Phase 9)**: ruff/mypy 零错误 + lint.yml CI 门禁; integration_nollm 测试分层; 20 个新单测 (chunking + probe); Vue3 前端脚手架 (Element Plus + Pinia + 4 核心页面); healthcheck --local 模式 | Enterprise AI Architecture Team |
 
 ---
 
@@ -416,6 +417,7 @@ llm:
 
 - **Phase 1 (MVP)**: Gradio (:7860)，快速验证
 - **Phase 2 (Production)**: Vue3 + Element Plus，企业级前端
+- **Vue3 现状**: Vue3 工程已创建于 `frontend/web/`，包含 Vite + TypeScript + Element Plus + Pinia + Vue Router，含登录/查询/对比/文档管理四个核心页面。Gradio MVP 保留共存。
 
 ## 3.7 DevOps 工具链
 
@@ -424,7 +426,7 @@ llm:
 | **Docker Compose** | 本地开发 / 集成测试 / Phase 1 生产部署 |
 | **Helm Charts** | K8s 生产/预发布部署 **(Phase X, 单机阶段不需要)** |
 | **GitHub Actions** | CI/CD 四阶段流水线 |
-| **Ruff + mypy** | 代码质量 (Lint + 类型检查, Phase 1 起) |
+| **Ruff + mypy** | 代码质量 (Lint + 类型检查, Phase 1 起); CI 门禁 `.github/workflows/lint.yml` (Phase 9) |
 | **GitHub Code Scanning** | 安全分析 (免费, 集成 Actions, Phase 1 起) |
 | **SonarQube** | 深度代码质量分析 **(Phase X 可选, 团队 >50 人时引入)** |
 | **Trivy** | 容器镜像安全扫描 |
@@ -1192,7 +1194,8 @@ chipwise-enterprise/
 ├── Dockerfile.embedding                # BGE-M3 Embedding 微服务镜像 (python:3.11-slim)
 ├── Dockerfile.reranker                 # bce-reranker 微服务镜像
 ├── alembic.ini                         # Alembic 迁移主配置 (sqlalchemy.url 从环境变量读取)
-├── .env.example                        # 环境变量模板 (PG_PASSWORD / REDIS_PASSWORD / JWT_SECRET_KEY 等)
+├── .env.example                        # 环境变量模板 (PG_PASSWORD / REDIS_PASSWORD / JWT_SECRET_KEY / VITE_API_BASE_URL 等)
+├── docker-compose.override.yml.example # 本地开发覆盖模板 (端口映射 + Attu UI)
 ├── .gitignore                          # Python 标准忽略 + __pycache__ / .venv / .env / logs/ / data/
 ├── README.md                           # 项目说明与快速启动指南
 ├── CLAUDE.md                           # AI 助手上下文 (与 .github/copilot-instructions.md 同步)
@@ -1414,7 +1417,30 @@ chipwise-enterprise/
 │
 ├── frontend/
 │   ├── gradio_app.py                   # Gradio UI (MVP, :7860): 对话查询 + 文件上传 + Markdown 渲染
-│   └── vue3/                           # Vue3 + Element Plus (生产版, :7860)
+│   ├── web/                            # Vue3 + Element Plus 前端 (Phase 9 实现)
+│   │   ├── package.json                # 依赖: Vue3 / Element Plus / Pinia / Vue Router / Axios
+│   │   ├── vite.config.ts              # Vite 构建配置 (dev proxy → :8080)
+│   │   ├── tsconfig.json
+│   │   ├── src/
+│   │   │   ├── main.ts                 # Vue3 入口
+│   │   │   ├── App.vue
+│   │   │   ├── api/                    # API 封装层
+│   │   │   │   ├── client.ts           # Axios 实例 + JWT 拦截器
+│   │   │   │   ├── auth.ts             # 登录/刷新 Token
+│   │   │   │   ├── query.ts            # 查询 (含 SSE 流式)
+│   │   │   │   ├── compare.ts          # 芯片对比
+│   │   │   │   └── documents.ts        # 文档上传
+│   │   │   ├── stores/                 # Pinia 状态管理
+│   │   │   ├── views/
+│   │   │   │   ├── LoginView.vue       # 登录页面
+│   │   │   │   ├── QueryView.vue       # SSE 流式查询
+│   │   │   │   ├── CompareView.vue     # 芯片对比
+│   │   │   │   └── DocumentsView.vue   # 文档管理
+│   │   │   └── router/
+│   │   │       └── index.ts
+│   │   └── public/
+│   │       └── index.html
+│   └── vue3/                           # Vue3 设计参考 (原始规划, 保留)
 │       ├── package.json
 │       ├── vite.config.ts
 │       ├── src/
@@ -1463,7 +1489,11 @@ chipwise-enterprise/
 │   │   ├── test_graph_store.py         # KuzuGraphStore Cypher + upsert
 │   │   ├── test_embedding_service_api.py # Embedding 微服务 API 契约 (Mock 模型)
 │   │   ├── test_reranker_service_api.py  # Reranker 微服务 API 契约 (Mock 模型)
-│   │   └── test_healthcheck_logic.py   # 健康检查判定逻辑 (Mock 外部连接)
+│   │   ├── test_healthcheck_logic.py   # 健康检查判定逻辑 (Mock 外部连接)
+│   │   ├── test_semantic_chunker.py    # SemanticChunker 单测 (4 tests, Phase 9)
+│   │   ├── test_parent_child_chunker.py # ParentChildChunker 单测 (4 tests, Phase 9)
+│   │   ├── test_lmstudio_probe.py      # LM Studio 探针单测 (4 tests, Phase 9)
+│   │   └── test_chunking_factory.py    # ChunkingFactory 单测 (8 tests, Phase 9)
 │   │
 │   ├── integration/                    # 集成测试 (需 Docker 基础设施运行)
 │   │   ├── test_docker_infra_health.py # PG + Milvus + Redis 容器 healthy
@@ -1477,7 +1507,8 @@ chipwise-enterprise/
 │   │   ├── test_rate_limiter_redis.py  # 真实 Redis 限流
 │   │   ├── test_query_path.py          # 端到端查询流: HTTP → Agent → Tool → Response
 │   │   ├── test_ingestion_path.py      # 文档 Ingestion 全链路
-│   │   └── test_agent_flows.py         # 复杂 Agent 多轮 Tool 调用场景
+│   │   ├── test_agent_flows.py         # 复杂 Agent 多轮 Tool 调用场景
+│   │   └── test_alembic_bidirectional.py # Alembic 双向迁移 (upgrade→downgrade→re-upgrade, Phase 9)
 │   │
 │   ├── e2e/                            # 端到端测试 (全系统运行)
 │   │   ├── test_chip_comparison.py     # 芯片对比完整流程
@@ -1537,6 +1568,7 @@ chipwise-enterprise/
 │   ├── copilot-instructions.md         # AI 助手指令 (与 CLAUDE.md 同步)
 │   └── workflows/
 │       ├── ci-cd.yaml                  # 4 阶段流水线: Lint → Build+Trivy → Integration → Deploy (§5.6)
+│       ├── lint.yml                    # ruff check + mypy CI 门禁 (Phase 9, PR 必过)
 │       └── security-scan.yaml          # Trivy 镜像安全扫描 + GitHub Code Scanning (Phase 1); SonarQube (Phase X 可选) (§5.7)
 │
 │  ─────────────── 云原生架构储备 (Phase X) ───────────────
@@ -1567,8 +1599,9 @@ chipwise-enterprise/
 │  ─────────────── 文档 ───────────────
 │
 └── docs/
-    ├── ENTERPRISE_DEV_SPEC.md          # 架构设计规格书 v5.1 (本文档)
-    └── DEVELOPMENT_PLAN.md             # 分阶段开发任务排期与验收标准
+    ├── ENTERPRISE_DEV_SPEC.md          # 架构设计规格书 v5.3 (本文档)
+    ├── DEVELOPMENT_PLAN.md             # 分阶段开发任务排期与验收标准
+    └── LOCAL_DEVELOPMENT.md            # 本地开发指南 (Phase 9: Docker + healthcheck --local + mock 模式)
 ```
 
 ## 4.5 部署拓扑
@@ -3300,6 +3333,8 @@ ingress:
 | Libs 层 (`libs/`) | ≥ 90% | Unit (Mock 外部依赖) |
 | 整体 | ≥ 75% | All |
 
+**Pytest Markers**：`unit`、`integration`、`e2e`、`load`、`integration_nollm`。其中 `integration_nollm` (Phase 9 新增) 标记无需 LM Studio 的集成测试子集，可在本地无 GPU 环境运行：`pytest -q -m integration_nollm`。
+
 ## 5.2 RAG 质量指标
 
 > 参见 [§2.10 RAG 质量评估](#210-rag-质量评估) 了解完整评估框架与黄金测试集维护流程。
@@ -3954,5 +3989,5 @@ class ChipParameter:
 
 *— End of Document —*
 
-*ChipWise Enterprise Architecture Specification v5.1*
+*ChipWise Enterprise Architecture Specification v5.3*
 *Approved by CTO Office, 2026-04-14*
