@@ -58,3 +58,6 @@ reports/*.html
 !reports/*baseline*.json
 !reports/sbom-*.json
 !reports/licenses-*.json
+
+# Playwright test results
+frontend/web/test-results/
