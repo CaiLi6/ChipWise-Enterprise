@@ -33,12 +33,20 @@ class BaseVectorStore(ABC):
     async def hybrid_search(
         self,
         dense: list[float],
-        sparse: dict[int, float],
+        sparse: dict[int, float] | None = None,
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
         collection: str = "datasheet_chunks",
+        *,
+        sparse_text: str | None = None,
+        sparse_method: str = "bgem3",
     ) -> list[RetrievalResult]:
-        """Hybrid (dense+sparse) vector search with RRF fusion."""
+        """Hybrid (dense+sparse) vector search with RRF fusion.
+
+        For BGE-M3 mode: pass sparse dict via ``sparse``.
+        For BM25 mode: pass raw query text via ``sparse_text``,
+        set ``sparse_method='bm25'``.
+        """
 
     @abstractmethod
     async def delete(self, ids: list[str], collection: str = "datasheet_chunks") -> int:

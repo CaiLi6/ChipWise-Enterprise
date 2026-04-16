@@ -100,10 +100,13 @@ class MilvusStore(BaseVectorStore):
     async def hybrid_search(
         self,
         dense: list[float],
-        sparse: dict[int, float],
+        sparse: dict[int, float] | None = None,
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
         collection: str = "datasheet_chunks",
+        *,
+        sparse_text: str | None = None,
+        sparse_method: str = "bgem3",
     ) -> list[RetrievalResult]:
         from pymilvus import AnnSearchRequest, RRFRanker  # type: ignore[import-untyped]
 
@@ -118,13 +121,27 @@ class MilvusStore(BaseVectorStore):
             limit=top_k,
             expr=expr or None,
         )
-        sparse_req = AnnSearchRequest(
-            data=[sparse],
-            anns_field="sparse_vector",
-            param={"metric_type": "IP", "params": {}},
-            limit=top_k,
-            expr=expr or None,
-        )
+
+        if sparse_method == "bm25":
+            if sparse_text is None:
+                raise ValueError("sparse_text is required when sparse_method='bm25'")
+            sparse_req = AnnSearchRequest(
+                data=[sparse_text],
+                anns_field="bm25_vector",
+                param={"metric_type": "BM25"},
+                limit=top_k,
+                expr=expr or None,
+            )
+        else:
+            if sparse is None:
+                raise ValueError("sparse dict is required when sparse_method='bgem3'")
+            sparse_req = AnnSearchRequest(
+                data=[sparse],
+                anns_field="sparse_vector",
+                param={"metric_type": "IP", "params": {}},
+                limit=top_k,
+                expr=expr or None,
+            )
 
         results = col.hybrid_search(
             reqs=[dense_req, sparse_req],

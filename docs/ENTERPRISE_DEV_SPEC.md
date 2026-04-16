@@ -171,7 +171,14 @@
 
 ## 2.3 多路混合检索
 
-BGE-M3 同时产出 dense 和 sparse 向量，Milvus 2.4+ 原生支持混合检索 + RRF 融合，完全替代旧版自建 BM25 索引 + 手动 RRF 代码。代码量减少约 60%，且检索精度更高（BGE-M3 的稀疏向量比传统 BM25 更强）。
+BGE-M3 同时产出 dense 和 sparse 向量，Milvus 2.5+ 原生支持混合检索 + RRF 融合。稀疏检索支持两种可插拔模式，通过 `retrieval.sparse_method` 配置切换：
+
+| 模式 | 稀疏信号来源 | 优势场景 |
+|------|-------------|---------|
+| `bgem3` (默认) | BGE-M3 sparse embedding | 语义级稀疏匹配，中英文混合查询 |
+| `bm25` | Milvus 2.5 原生 BM25 全文检索 | 精确关键词匹配（芯片型号如 STM32F407VGT6） |
+
+两种模式共享同一 Milvus collection（`sparse_vector` 和 `bm25_vector` 字段共存），切换无需重新入库。`bm25_vector` 由 Milvus BM25 Function 在 insert 时从 `content` 字段自动生成。
 
 v3.0 在向量检索基础上新增图谱信号增强排序，形成 **Hybrid Search + Graph Boost** 三路召回架构。
 
@@ -404,7 +411,7 @@ llm:
 | 存储引擎 | 用途 | 选型理由 |
 |----------|------|---------|
 | **PostgreSQL 15+** | 关系数据 (芯片/参数/用户/BOM/勘误) | 成熟 ACID, 丰富索引, Alembic 迁移 |
-| **Milvus 2.4+** | 向量检索 (Dense+Sparse+RRF) | 原生混合检索, 可扩展至分布式集群 |
+| **Milvus 2.5+** | 向量检索 (Dense+Sparse+BM25+RRF) | 原生混合检索 + BM25 全文检索, 可扩展至分布式集群 |
 | **Redis 7** | 缓存/队列/会话/限流 | 多数据结构, PUB/SUB, Celery Broker |
 | **Kùzu** | 知识图谱 (芯片/参数/替代/勘误) | 嵌入式零运维, openCypher, mmap 低开销 |
 
@@ -1331,7 +1338,7 @@ chipwise-enterprise/
 │   │  ── Retrieval: 检索核心 ───────────────────────────────────────
 │   │
 │   ├── retrieval/
-│   │   ├── hybrid_search.py            # HybridSearcher: Milvus hybrid_search() + RRFRanker(k=60) (§4.7.2)
+│   │   ├── hybrid_search.py            # HybridSearcher: Milvus hybrid_search() + RRFRanker(k=60), 支持 bgem3/bm25 切换 (§4.7.2)
 │   │   ├── graph_search.py             # GraphSearcher: Kùzu openCypher 多跳查询 (v3.0) (§4.7.4)
 │   │   ├── sql_search.py              # SQLSearcher: PostgreSQL ILIKE + ts_vector 全文检索 (降级检索)
 │   │   ├── reranker.py                 # RerankerClient: bce-reranker :8002 远程调用 + 降级跳过 (§3.3)
@@ -2197,6 +2204,11 @@ CREATE INDEX idx_audit_intent ON query_audit_log(intent);
 **Collection Schema**:
 
 ```python
+bm25_fn = Function(
+    name="text_bm25", function_type=FunctionType.BM25,
+    input_field_names=["content"], output_field_names=["bm25_vector"],
+)
+
 DATASHEET_CHUNKS_SCHEMA = CollectionSchema(fields=[
     FieldSchema(name="chunk_id", dtype=DataType.VARCHAR, max_length=200, is_primary=True),
     FieldSchema(name="dense_vector", dtype=DataType.FLOAT_VECTOR, dim=1024),
@@ -2207,34 +2219,48 @@ DATASHEET_CHUNKS_SCHEMA = CollectionSchema(fields=[
     FieldSchema(name="doc_type", dtype=DataType.VARCHAR, max_length=30),
     FieldSchema(name="page", dtype=DataType.INT64),
     FieldSchema(name="section", dtype=DataType.VARCHAR, max_length=300),
-    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535, enable_analyzer=True),
+    FieldSchema(name="bm25_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
     FieldSchema(name="collection", dtype=DataType.VARCHAR, max_length=100),
-])
+], functions=[bm25_fn])
 ```
 
 **索引策略**:
 - Dense: HNSW (COSINE, M=16, efConstruction=256)
-- Sparse: SPARSE_INVERTED_INDEX (IP)
+- Sparse (BGE-M3): SPARSE_INVERTED_INDEX (IP)
+- Sparse (BM25): SPARSE_INVERTED_INDEX (BM25) — Milvus 2.5 Function 从 `content` 自动生成
 - 查询时: ef=128
 
-**混合检索** (Milvus 2.4+ 原生 RRF):
+**混合检索** (Milvus 2.5+ 原生 RRF, 支持 bgem3/bm25 切换):
 
 ```python
 from pymilvus import AnnSearchRequest, RRFRanker
 
-def hybrid_search(query_text: str, top_k: int = 20, filters: dict = None):
-    embeddings = bgem3_client.encode(query_text)
+# sparse_method 由 settings.yaml 中 retrieval.sparse_method 控制
+def hybrid_search(query_text: str, top_k: int = 20, filters: dict = None,
+                  sparse_method: str = "bgem3"):
     filter_expr = build_filter_expr(filters)
 
+    dense_vec = bgem3_client.encode(query_text, return_sparse=False)["dense"]
     dense_req = AnnSearchRequest(
-        data=[embeddings["dense"]], anns_field="dense_vector",
+        data=[dense_vec], anns_field="dense_vector",
         param={"metric_type": "COSINE", "params": {"ef": 128}},
         limit=top_k, expr=filter_expr,
     )
-    sparse_req = AnnSearchRequest(
-        data=[embeddings["sparse"]], anns_field="sparse_vector",
-        param={"metric_type": "IP"}, limit=top_k, expr=filter_expr,
-    )
+
+    if sparse_method == "bm25":
+        # Milvus 2.5 原生 BM25: 传入原始文本, Milvus 内部分词 + BM25 评分
+        sparse_req = AnnSearchRequest(
+            data=[query_text], anns_field="bm25_vector",
+            param={"metric_type": "BM25"}, limit=top_k, expr=filter_expr,
+        )
+    else:
+        # BGE-M3 sparse embedding 向量
+        sparse_vec = bgem3_client.encode(query_text, return_sparse=True)["sparse"]
+        sparse_req = AnnSearchRequest(
+            data=[sparse_vec], anns_field="sparse_vector",
+            param={"metric_type": "IP"}, limit=top_k, expr=filter_expr,
+        )
 
     return collection.hybrid_search(
         reqs=[dense_req, sparse_req],
@@ -3691,6 +3717,7 @@ redis:
 # --- Retrieval ---
 retrieval:
   mode: hybrid
+  sparse_method: bgem3   # "bgem3" (BGE-M3 sparse vectors) | "bm25" (Milvus 2.5 native BM25)
   top_k_search: 30
   top_k_rerank: 10
   rrf_k: 60
@@ -3913,7 +3940,7 @@ class RetrievalResult:
     chunk_id: str
     score: float
     rank: int
-    retriever_method: str            # "dense" | "sparse" | "hybrid" | "sql"
+    retriever_method: str            # "dense" | "sparse" | "hybrid" | "hybrid_bm25" | "sql"
     content: str = ""
     metadata: dict = field(default_factory=dict)
 

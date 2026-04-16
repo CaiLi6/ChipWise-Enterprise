@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import sys
-from pymilvus import (
+
+from pymilvus import (  # type: ignore[import-untyped]
     Collection,
     CollectionSchema,
     DataType,
     FieldSchema,
-    MilvusException,
+    Function,
+    FunctionType,
     connections,
     utility,
 )
-
 
 # ── datasheet_chunks (11 fields) ────────────────────────────────────
 
@@ -26,7 +27,8 @@ DATASHEET_CHUNKS_FIELDS = [
     FieldSchema(name="doc_type", dtype=DataType.VARCHAR, max_length=30),
     FieldSchema(name="page", dtype=DataType.INT64),
     FieldSchema(name="section", dtype=DataType.VARCHAR, max_length=300),
-    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535, enable_analyzer=True),
+    FieldSchema(name="bm25_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
     FieldSchema(name="collection", dtype=DataType.VARCHAR, max_length=100),
 ]
 
@@ -39,7 +41,8 @@ KNOWLEDGE_NOTES_FIELDS = [
     FieldSchema(name="user_id", dtype=DataType.INT64),
     FieldSchema(name="chip_id", dtype=DataType.INT64),
     FieldSchema(name="note_type", dtype=DataType.VARCHAR, max_length=30),
-    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+    FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535, enable_analyzer=True),
+    FieldSchema(name="bm25_vector", dtype=DataType.SPARSE_FLOAT_VECTOR),
     FieldSchema(name="tags", dtype=DataType.VARCHAR, max_length=500),
 ]
 
@@ -63,6 +66,14 @@ def create_indexes(collection: Collection) -> None:
             "metric_type": "IP",
         },
     )
+    # BM25: SPARSE_INVERTED_INDEX with BM25 metric
+    collection.create_index(
+        field_name="bm25_vector",
+        index_params={
+            "index_type": "SPARSE_INVERTED_INDEX",
+            "metric_type": "BM25",
+        },
+    )
 
 
 def create_collections(host: str = "localhost", port: int = 19530) -> None:
@@ -76,7 +87,13 @@ def create_collections(host: str = "localhost", port: int = 19530) -> None:
         if utility.has_collection(name):
             print(f"Collection '{name}' already exists — skipping.")
             continue
-        schema = CollectionSchema(fields=fields, description=f"ChipWise {name}")
+        bm25_fn = Function(
+            name="text_bm25",
+            function_type=FunctionType.BM25,
+            input_field_names=["content"],
+            output_field_names=["bm25_vector"],
+        )
+        schema = CollectionSchema(fields=fields, functions=[bm25_fn], description=f"ChipWise {name}")
         col = Collection(name=name, schema=schema)
         create_indexes(col)
         col.load()

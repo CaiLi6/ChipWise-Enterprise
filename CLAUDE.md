@@ -152,7 +152,7 @@ Runs **embedded inside the FastAPI process** (no port). Data dir: `data/kuzu/`. 
 
 ### Milvus Hybrid Search
 
-BGE-M3 produces dense (1024-dim) + sparse vectors in one call. Use `collection.hybrid_search()` with `RRFRanker(k=60)`. HNSW: M=16, efConstruction=256, search ef=128.
+BGE-M3 produces dense (1024-dim) + sparse vectors in one call. Use `collection.hybrid_search()` with `RRFRanker(k=60)`. HNSW: M=16, efConstruction=256, search ef=128. Sparse method is pluggable via `retrieval.sparse_method` in settings.yaml: `bgem3` (BGE-M3 sparse vectors, default) or `bm25` (Milvus 2.5 native BM25 full-text search on `bm25_vector` field, auto-generated from `content` by Milvus Function).
 
 ### SSO/OIDC Authentication (`src/auth/sso/`)
 

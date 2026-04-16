@@ -77,6 +77,7 @@ class RedisSettings(BaseModel):
 
 class RetrievalSettings(BaseModel):
     mode: str = "hybrid"
+    sparse_method: str = "bgem3"
     top_k_search: int = 30
     top_k_rerank: int = 10
     rrf_k: int = 60

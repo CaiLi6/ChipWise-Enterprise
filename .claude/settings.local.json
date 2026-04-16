@@ -33,7 +33,10 @@
       "Bash(.venv/bin/pytest -q -m unit --tb=line)",
       "Bash(npm --prefix frontend/web run test:run)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "WebSearch",
+      "Bash(python *)",
+      "Bash(.venv/bin/mypy *)"
     ]
   }
 }

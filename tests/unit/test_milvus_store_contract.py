@@ -50,10 +50,13 @@ class InMemoryVectorStore(BaseVectorStore):
     async def hybrid_search(
         self,
         dense: list[float],
-        sparse: dict[int, float],
+        sparse: dict[int, float] | None = None,
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
         collection: str = "datasheet_chunks",
+        *,
+        sparse_text: str | None = None,
+        sparse_method: str = "bgem3",
     ) -> list[RetrievalResult]:
         return await self.query(dense, top_k, filters, collection)
 

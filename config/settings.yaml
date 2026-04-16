@@ -71,6 +71,7 @@ redis:
 # --- Retrieval ---
 retrieval:
   mode: hybrid
+  sparse_method: bgem3   # "bgem3" (BGE-M3 sparse vectors) | "bm25" (Milvus native BM25)
   top_k_search: 30
   top_k_rerank: 10
   rrf_k: 60

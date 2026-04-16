@@ -83,5 +83,12 @@ auth:
     enabled: true
     jwt_secret: "test-jwt-secret"
 
+retrieval:
+  mode: hybrid
+  sparse_method: bgem3
+  top_k_search: 30
+  top_k_rerank: 10
+  rrf_k: 60
+
 observability:
   log_level: "DEBUG"
