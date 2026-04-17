@@ -36,7 +36,9 @@
       "Bash(git commit:*)",
       "WebSearch",
       "Bash(python *)",
-      "Bash(.venv/bin/mypy *)"
+      "Bash(.venv/bin/mypy *)",
+      "Bash(mkdir -p /home/mech-mind/ChipWise-Enterprise/.claude/skills/learn/references)",
+      "Bash(mkdir -p /home/mech-mind/ChipWise-Enterprise/.github/skills/learn/references)"
     ]
   }
 }
