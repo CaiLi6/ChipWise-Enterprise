@@ -106,7 +106,7 @@ async function handleSend() {
     </div>
 
     <!-- 聊天区域 -->
-    <div ref="chatContainer" style="flex: 1; overflow-y: auto; padding: 16px">
+    <div ref="chatContainer" style="flex: 1; overflow-y: auto; padding: 24px 16px; background: #fafafa">
       <div style="max-width: 860px; margin: 0 auto">
         <!-- 欢迎状态 -->
         <div

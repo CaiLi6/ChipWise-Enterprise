@@ -44,20 +44,22 @@ const scoreTier = computed<'high' | 'mid' | 'low'>(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 4px 3px 8px;
-  border: 1px solid #e4e7ed;
+  padding: 3px 10px 3px 4px;
+  border: 1px solid #f3f4f6;
   border-radius: 999px;
-  background: #fafbfc;
+  background: #fafafa;
   font-size: 12px;
   line-height: 1.4;
-  color: #606266;
+  color: #6b7280;
   cursor: default;
   max-width: 240px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .chip:hover {
-  background: #f0f7ff;
-  border-color: #c6e2ff;
+  background: #ffffff;
+  border-color: #e5e7eb;
+  color: #374151;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
 }
 .chip-idx {
   flex-shrink: 0;
@@ -65,36 +67,39 @@ const scoreTier = computed<'high' | 'mid' | 'low'>(() => {
   height: 18px;
   padding: 0 5px;
   border-radius: 9px;
-  background: #e4e7ed;
-  color: #303133;
-  font-size: 11px;
+  background: #ffffff;
+  color: #6b7280;
+  font-size: 10.5px;
   font-weight: 600;
+  border: 1px solid #f3f4f6;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-variant-numeric: tabular-nums;
 }
 .chip-doc {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #409EFF;
+  color: #374151;
   font-weight: 500;
 }
 .chip-page {
-  color: #909399;
+  color: #9ca3af;
   font-size: 11px;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .chip-bar {
   flex-shrink: 0;
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: #c0c4cc;
+  background: #d1d5db;
 }
-.chip.high .chip-bar { background: #67C23A; }
-.chip.mid .chip-bar  { background: #E6A23C; }
-.chip.low .chip-bar  { background: #C0C4CC; }
+.chip.high .chip-bar { background: #10b981; }
+.chip.mid  .chip-bar { background: #f59e0b; }
+.chip.low  .chip-bar { background: #d1d5db; }
 </style>
 
 <style>
