@@ -2459,7 +2459,7 @@ class BaseGraphStore(ABC):
 │  │  • Token 预算: 单轮最多 5 次 Tool Call, 总 token < 8192     │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 │                                                                    │
-│  ┌─── ReAct Loop (最多 max_iterations=5) ──────────────────────┐  │
+│  ┌─── ReAct Loop (最多 max_iterations=6, max_total_tokens=40960) ─┐  │
 │  │  [Thought] → [Action: Tool Call] → [Observation] → ...      │  │
 │  │  信息充分 → [Final Answer]                                   │  │
 │  └──────────────────────────────────────────────────────────────┘  │
@@ -2478,8 +2478,8 @@ class BaseGraphStore(ABC):
 ```python
 @dataclass
 class AgentConfig:
-    max_iterations: int = 5
-    max_total_tokens: int = 8192
+    max_iterations: int = 6           # Phase 12.1: bumped from 5 to give Agent room for sql_query → rag_search compound flows
+    max_total_tokens: int = 40960     # Phase 12.1: bumped from 8192 to fit 40K-context LM Studio re-loaded models
     parallel_tool_calls: bool = True
     temperature: float = 0.1        # 主推理模型参数
     tool_timeout: float = 30.0
@@ -3696,8 +3696,8 @@ jobs:
 Phase 1 ─── Phase 2 ─── Phase 3 ─── Phase 4 ─── Phase 5 ─── Phase 6
 基础设施     核心 RAG     数据工程     结构化管线   高级功能     前端+交付
 W1-2        W3-4        W5-7        W8-10       W11-13      W14-16
-─── Phase 7 ─── Phase 8 ─── Phase 9 ─── Phase 10 ─── Phase 11 ─── Phase 12
-    切片可插拔    生产加固     工程加固     Vue3 可用化   工程全量硬化  评估 + UX
+─── Phase 7 ─── Phase 8 ─── Phase 9 ─── Phase 10 ─── Phase 11 ─── Phase 12/12.1/12.2
+    切片可插拔    生产加固     工程加固     Vue3 可用化   工程全量硬化  评估+UX/拒答/视觉
     W17         W18         W19         W20          W21          W22
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
@@ -3718,6 +3718,8 @@ W1-2        W3-4        W5-7        W8-10       W11-13      W14-16
 | **Phase 10: Vue3 可用化** | Week 20 | 契约对齐 + 共享组件 + 401 闭环 + Vitest | 8 |
 | **Phase 11: 工程全量硬化** | Week 21 | Backend CI 覆盖率门禁 + Playwright + SBOM + Dockerfile | 12 |
 | **Phase 12: 评估 + UX** | Week 22 | 8 指标评估闭环 + /evaluations 仪表板 + Markdown/KaTeX 渲染 + 引用 chip + SSE 修复 + BM25 切换 | 21 |
+| **Phase 12.1: 幻觉抑制** | Week 22 | 数字对齐校验 + 检索质量闸 + 中文拒答模板 + Agent 提前停止哨兵 + max_total_tokens 8192→40960 + max_iterations 5→6 | 4 |
+| **Phase 12.2: 聊天 UI 视觉重构** | Week 22 | MessageBubble Vercel/Linear 级重写：极简表头、callout 自动检测、KaTeX/Markdown 排版、CitationCard 中性化色板 | 1 |
 
 > **详细任务排期、验收标准和测试方法请参考 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)**
 
@@ -3861,10 +3863,10 @@ rate_limit:
   global_primary_llm_concurrent: 2
   global_router_llm_concurrent: 10
 
-# --- Agent Orchestrator (v3.0) ---
+# --- Agent Orchestrator (v3.0; Phase 12.1 budget bump) ---
 agent:
-  max_iterations: 5
-  max_total_tokens: 8192
+  max_iterations: 6           # was 5 — give Agent room for sql_query → rag_search compound flows
+  max_total_tokens: 40960     # was 8192 — fit 40K-context LM Studio re-loaded models, pair w/ grounding gate
   parallel_tool_calls: true
   temperature: 0.1          # 主推理模型; 路由模型固定 temperature=0
   tool_timeout: 30.0
