@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -23,10 +24,10 @@ logger = logging.getLogger("chipwise.auth")
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
-def _pg_conn():
+def _pg_conn() -> Any:
     """Return a psycopg2 connection using settings or env vars."""
     try:
-        import psycopg2
+        import psycopg2  # type: ignore[import-untyped]
 
         from src.api.dependencies import get_settings
         db = get_settings().database

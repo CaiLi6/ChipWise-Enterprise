@@ -1,9 +1,9 @@
 # ChipWise Enterprise — Development Plan
 
-> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.5 中提取的详细开发任务排期。
+> 本文档从 `ENTERPRISE_DEV_SPEC.md` v5.7 中提取的详细开发任务排期。
 > 包含各阶段的任务分解、验收标准和测试方法。
 > 架构设计详情请参考 [ENTERPRISE_DEV_SPEC.md](./ENTERPRISE_DEV_SPEC.md)。
-> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.5（2026-04-14 更新，含工程化全量加固 Phase 11）。
+> **注意**: 所有 `§` 章节引用对齐 ENTERPRISE_DEV_SPEC.md v5.7（2026-04-22 更新，含 Phase 12 RAG 评估闭环 + Phase 12.1 数字对齐拒答）。
 
 > **排期原则（严格对齐 ENTERPRISE_DEV_SPEC v5.3 架构分层与 §4.4 目录结构）**
 >
@@ -28,7 +28,9 @@
 | **Phase 9** | Engineering Hardening + Vue3 | ruff/mypy 零化 + 测试分层 + Vue3 前端脚手架 | 5 |
 | **Phase 10** | Vue3 Frontend Usability | API 契约对齐 + 共享组件 + 守卫 + Vitest | 6 |
 | **Phase 11** | Engineering Hardening (Pre-Deploy) | CI + pre-commit + 监控 + 安全 + Docker + 文档 + E2E | 11 |
-| **总计** | | | **113** |
+| **Phase 12** | RAG Evaluation Closed Loop + UX | 8 指标评估 + LLM-as-judge + 黄金集 + Markdown/KaTeX + BM25 可插拔 | 9 |
+| **Phase 12.1** | Anti-Hallucination Hardening | 数字对齐校验 + 检索质量闸 + 中文拒答模板 + Agent 提前停止哨兵 | 4 |
+| **总计** | | | **126** |
 
 ---
 

@@ -12,6 +12,9 @@ services:
       - "8001:8001"
     environment:
       - MODEL_NAME=BAAI/bge-m3
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HF_HUB_DISABLE_XET=1
+      - HF_HUB_DOWNLOAD_TIMEOUT=120
     volumes:
       - model-cache:/root/.cache
     restart: unless-stopped
@@ -35,6 +38,9 @@ services:
       - "8002:8002"
     environment:
       - MODEL_NAME=maidalun1020/bce-reranker-base_v1
+      - HF_ENDPOINT=https://hf-mirror.com
+      - HF_HUB_DISABLE_XET=1
+      - HF_HUB_DOWNLOAD_TIMEOUT=120
     volumes:
       - model-cache:/root/.cache
     restart: unless-stopped

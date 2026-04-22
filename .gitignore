@@ -21,6 +21,9 @@ ENV/
 .env.*
 !.env.example
 
+# Secrets (JWT keys, etc.)
+secrets/
+
 # IDE
 .idea/
 .vscode/

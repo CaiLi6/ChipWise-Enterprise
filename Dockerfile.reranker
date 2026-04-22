@@ -7,7 +7,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements-services.txt .
-RUN pip install --no-cache-dir -r requirements-services.txt
+# CPU-only torch (target is AMD APU, no NVIDIA GPU)
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu "torch>=2.2.0"
+# Use Tsinghua mirror + long timeout + retries for reliable downloads from China network
+RUN pip install --no-cache-dir \
+      -i https://pypi.tuna.tsinghua.edu.cn/simple \
+      --timeout 600 --retries 10 \
+      -r requirements-services.txt
 
 COPY src/services/reranker_service.py ./reranker_service.py
 

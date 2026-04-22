@@ -90,6 +90,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "http://localhost:7860",
             "http://127.0.0.1:7860",
             "http://localhost:8080",
+            "http://localhost:4173",
+            "http://127.0.0.1:4173",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
         ],
         allow_credentials=True,
         allow_methods=["*"],
@@ -113,11 +117,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     from src.api.routers.auth import router as auth_router
     from src.api.routers.compare import router as compare_router
     from src.api.routers.documents import router as documents_router
+    from src.api.routers.evaluations import router as evaluations_router
+    from src.api.routers.golden import router as golden_router
     from src.api.routers.health import router as health_router
     from src.api.routers.knowledge import router as knowledge_router
     from src.api.routers.query import router as query_router
     from src.api.routers.sso import router as sso_router
     from src.api.routers.tasks import router as tasks_router
+    from src.api.routers.traces import router as traces_router
 
     app.include_router(health_router)
     app.include_router(auth_router)
@@ -127,6 +134,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(compare_router)
     app.include_router(knowledge_router)
     app.include_router(query_router)
+    app.include_router(traces_router)
+    app.include_router(evaluations_router)
+    app.include_router(golden_router)
 
     return app
 

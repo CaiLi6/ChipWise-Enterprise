@@ -15,6 +15,8 @@ const router = createRouter({
         { path: 'query', name: 'Query', component: () => import('@/views/QueryView.vue') },
         { path: 'compare', name: 'Compare', component: () => import('@/views/CompareView.vue') },
         { path: 'documents', name: 'Documents', component: () => import('@/views/DocumentsView.vue') },
+        { path: 'traces', name: 'Traces', component: () => import('@/views/TracesView.vue') },
+        { path: 'evaluations', name: 'Evaluations', component: () => import('@/views/EvaluationsView.vue') },
       ],
     },
   ],

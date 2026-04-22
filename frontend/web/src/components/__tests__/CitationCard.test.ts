@@ -13,7 +13,7 @@ const mockCitation = {
 describe('CitationCard', () => {
   const globalConfig = { plugins: [ElementPlus] }
 
-  it('renders doc_id', () => {
+  it('renders doc_id as the chip label', () => {
     const wrapper = mount(CitationCard, {
       props: { citation: mockCitation },
       global: globalConfig,
@@ -21,20 +21,22 @@ describe('CitationCard', () => {
     expect(wrapper.text()).toContain('doc-123')
   })
 
-  it('renders score formatted to 2 decimal places', () => {
+  it('renders the chip element with score-tier class', () => {
     const wrapper = mount(CitationCard, {
       props: { citation: mockCitation },
       global: globalConfig,
     })
-    expect(wrapper.text()).toContain('0.92')
+    const chip = wrapper.find('.chip')
+    expect(chip.exists()).toBe(true)
+    // 0.92 falls in the "high" tier (>= 0.7)
+    expect(chip.classes()).toContain('high')
   })
 
-  it('truncates long content to 150 chars', () => {
-    const longContent = 'A'.repeat(200)
+  it('shows the page number when provided', () => {
     const wrapper = mount(CitationCard, {
-      props: { citation: { ...mockCitation, content: longContent } },
+      props: { citation: { ...mockCitation, page_number: 42 } },
       global: globalConfig,
     })
-    expect(wrapper.text()).toContain('…')
+    expect(wrapper.text()).toContain('p.42')
   })
 })

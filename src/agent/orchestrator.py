@@ -110,7 +110,9 @@ class AgentOrchestrator:
                 if trace:
                     trace.record_stage("budget_exhausted", {"iteration": i})
                 return AgentResult(
-                    answer="I've used all available tokens. Here's what I found so far.",
+                    answer=self._early_stop_answer(
+                        "token_budget_exhausted", i, budget.used, steps,
+                    ),
                     tool_calls_log=steps,
                     total_tokens=budget.used,
                     iterations=i,
@@ -182,7 +184,9 @@ class AgentOrchestrator:
             trace.record_stage("max_iterations", {"iterations": self.config.max_iterations})
 
         return AgentResult(
-            answer="Reached maximum iterations. Returning partial results.",
+            answer=self._early_stop_answer(
+                "max_iterations", self.config.max_iterations, budget.used, steps,
+            ),
             tool_calls_log=steps,
             total_tokens=budget.used,
             iterations=self.config.max_iterations,
@@ -258,6 +262,39 @@ class AgentOrchestrator:
         except Exception as exc:
             logger.exception("Tool %s raised an error", tool_name)
             return {"error": str(exc)}
+
+    @staticmethod
+    def _early_stop_answer(
+        reason: str, iterations: int, tokens_used: int, steps: list[AgentStep],
+    ) -> str:
+        """Render a Chinese, actionable message for early-stop exits.
+
+        Downstream Grounding Gate further replaces/annotates this — but we
+        still want a useful base string for callers that bypass grounding.
+        """
+        tool_names: list[str] = []
+        for s in steps:
+            for t in s.tool_calls:
+                if t.tool_name not in tool_names:
+                    tool_names.append(t.tool_name)
+        tools_str = "、".join(tool_names) if tool_names else "无"
+        reason_cn = {
+            "token_budget_exhausted": (
+                f"Agent 在检索过程中用尽了本次请求的 token 预算"
+                f"（~{tokens_used} tokens，已跑 {iterations} 轮工具调用）"
+            ),
+            "max_iterations": f"Agent 达到最大迭代次数 {iterations}，仍未得出结论",
+        }.get(reason, f"Agent 提前停止（{reason}）")
+        return (
+            "## 结论\n\n"
+            "暂无法给出可靠答案。\n\n"
+            "## 原因\n\n"
+            f"{reason_cn}。已调用工具: **{tools_str}**。\n\n"
+            "## 建议\n\n"
+            "- 把问题拆成更具体的单点查询（例如：只问“用户 IO 总数”而非多参数一次问）\n"
+            "- 指定参数类别关键词（`DSP 数量`、`PCIe Gen`、`封装引脚`）帮助 SQL 直达\n"
+            "- 若确认问题已足够简短，请联系管理员扩大 `agent.max_total_tokens`"
+        )
 
     @staticmethod
     def _build_assistant_message(response: LLMResponse) -> dict[str, Any]:

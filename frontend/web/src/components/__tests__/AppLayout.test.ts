@@ -32,7 +32,8 @@ describe('AppLayout', () => {
     })
 
     const menuItems = wrapper.findAll('.el-menu-item')
-    expect(menuItems.length).toBe(3)
+    // 5 sections: Query, Compare, Documents, Traces, Evaluations
+    expect(menuItems.length).toBe(5)
   })
 
   it('shows ChipWise brand text', async () => {

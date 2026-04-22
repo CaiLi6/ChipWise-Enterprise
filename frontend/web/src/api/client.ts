@@ -17,11 +17,16 @@ api.interceptors.request.use((config) => {
 let isRefreshing = false
 let pendingRequests: Array<(token: string) => void> = []
 
+// Endpoints where 401/403 means "bad credentials", NOT "expired token" —
+// never try to refresh or redirect to /login for these.
+const AUTH_NO_RETRY = /\/api\/v1\/auth\/(login|register|refresh)$/
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const original = error.config as InternalAxiosRequestConfig & { _retry?: boolean }
-    if (error.response?.status === 401 && !original._retry) {
+    const url = original?.url || ''
+    if (error.response?.status === 401 && !AUTH_NO_RETRY.test(url) && !original._retry) {
       original._retry = true
 
       // Lazy import to avoid circular dependency at module load time

@@ -43,7 +43,7 @@ services:
     image: redis:7-alpine
     container_name: chipwise-redis
     ports: ["6379:6379"]
-    command: redis-server --maxmemory 3gb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 3gb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     deploy:

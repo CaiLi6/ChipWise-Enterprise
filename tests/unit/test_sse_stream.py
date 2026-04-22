@@ -43,6 +43,12 @@ def client() -> TestClient:
     app.dependency_overrides[get_current_user] = lambda: _TEST_USER
     app.dependency_overrides[get_orchestrator] = lambda: mock_orch
 
+    # Disable grounding gate (mock orchestrator returns no citations,
+    # which would otherwise trigger abstain and rewrite the answer).
+    class _StubSettings:
+        grounding = {"enabled": False}
+    app.state.settings = _StubSettings()
+
     return TestClient(app, raise_server_exceptions=False)
 
 

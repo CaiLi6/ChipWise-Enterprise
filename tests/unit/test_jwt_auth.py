@@ -221,12 +221,61 @@ class TestRBAC:
 @pytest.mark.unit
 class TestAuthRouter:
     @pytest.fixture(autouse=True)
-    def _clear_users(self):
+    def _fake_pg(self, monkeypatch):
+        """Replace ``_pg_conn`` with an in-memory fake that mimics the users table."""
+        users: dict[str, dict] = {}
+
+        class _FakeCursor:
+            def __init__(self, store: dict) -> None:
+                self._store = store
+                self._last: tuple | None = None
+
+            def execute(self, sql: str, params: tuple = ()) -> None:
+                sql_norm = " ".join(sql.split()).lower()
+                if sql_norm.startswith("select id from users where username"):
+                    self._last = (1,) if params[0] in self._store else None
+                elif sql_norm.startswith("insert into users"):
+                    username, _email, pw_hash, role, dept, *_ = params
+                    self._store[username] = {
+                        "username": username, "password_hash": pw_hash,
+                        "role": role, "department": dept,
+                    }
+                    self._last = None
+                elif sql_norm.startswith("select username, password_hash, role, department from users"):
+                    u = self._store.get(params[0])
+                    self._last = (
+                        (u["username"], u["password_hash"], u["role"], u["department"])
+                        if u else None
+                    )
+                elif sql_norm.startswith("update users set last_login_at"):
+                    self._last = None
+                else:
+                    self._last = None
+
+            def fetchone(self):
+                return self._last
+
+            def close(self) -> None:
+                pass
+
+        class _FakeConn:
+            def __init__(self, store: dict) -> None:
+                self._store = store
+
+            def cursor(self) -> _FakeCursor:
+                return _FakeCursor(self._store)
+
+            def commit(self) -> None:
+                pass
+
+            def close(self) -> None:
+                pass
+
         import src.api.routers.auth as auth_mod
 
-        auth_mod._users.clear()
+        monkeypatch.setattr(auth_mod, "_pg_conn", lambda: _FakeConn(users))
         yield
-        auth_mod._users.clear()
+        users.clear()
 
     @pytest.fixture
     def auth_client(self, auth_settings):

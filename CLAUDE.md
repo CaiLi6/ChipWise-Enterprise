@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> `.github/copilot-instructions.md` mirrors this file — keep both in sync when updating.
+> `.github/copilot-instructions.md` mirrors this file — keep both in sync when updating. Last sync: ENTERPRISE_DEV_SPEC v5.7 (2026-04-22).
 
 > **First-time deployment (极摩客 or any fresh machine)**: After `git clone`, read `docs/DEPLOYMENT_CHECKLIST.md` and walk the user through Phase 0-12. This is the first time the full stack meets real LM Studio — treat Phase 8+ test failures as expected and help diagnose rather than skip.
 
@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **ChipWise Enterprise** — a chip data intelligence retrieval and analysis platform for semiconductor hardware teams. Uses **Agentic RAG** (ReAct Agent + Tool Calling) and **Graph RAG** (Kùzu knowledge graph) for natural-language chip queries, comparisons, BOM review, and test case generation. All inference runs locally on a single AMD Ryzen AI 395 machine (128 GB RAM) via LM Studio — zero data exfiltration.
 
-All 11 development phases are complete. Architecture spec: `docs/ENTERPRISE_DEV_SPEC.md` (v5.5). Task breakdown: `docs/DEVELOPMENT_PLAN.md` (113 tasks).
+All 12 development phases are complete (Phase 12 = evaluation system + frontend UX + BM25 hybrid + grounding gate). Architecture spec: `docs/ENTERPRISE_DEV_SPEC.md` (v5.7). Task breakdown: `docs/DEVELOPMENT_PLAN.md` (113 tasks).
 
 ## Prerequisites
 
@@ -85,7 +85,7 @@ All code must pass `ruff check` and `mypy` before committing.
 |-------|-----------|
 | 1 Frontend | Gradio MVP (`frontend/gradio_app.py`) + Vue3 (`frontend/web/`: Vite + Element Plus + Pinia) |
 | 2 API Gateway | FastAPI :8080 — JWT, rate limiting, CORS, request tracing |
-| 3 Agent Orchestrator | ReAct loop (max 5 iterations), LLM-driven tool selection |
+| 3 Agent Orchestrator | ReAct loop (max 6 iterations, 40 960 tokens), LLM-driven tool selection |
 | 4 Core Services | QueryRewriter, ConversationManager, ResponseBuilder, ReportEngine |
 | 5 Model Services | LM Studio :1234 (primary + router models), BGE-M3 :8001, bce-reranker :8002 |
 | 6 Storage | PostgreSQL :5432, Milvus :19530, Redis :6379, Kùzu (embedded) |
@@ -142,7 +142,7 @@ Five types flow end-to-end — extend via subclasses, never break the base:
 
 ### Agent Tools (`src/agent/tools/`)
 
-Each tool inherits `BaseTool` (name, description, parameters_schema, execute). Auto-discovered by `ToolRegistry.discover()`. Adding a capability = new `BaseTool` subclass. Parallel tool calls enabled. Budget: 5 iterations, 8192 tokens max (`TokenBudget`).
+Each tool inherits `BaseTool` (name, description, parameters_schema, execute). Auto-discovered by `ToolRegistry.discover()`. Adding a capability = new `BaseTool` subclass. Parallel tool calls enabled. Budget: 6 iterations, 40 960 tokens max (`TokenBudget`). Tool-selection priority + STOP rules live in `config/prompts/agent_system.txt` to keep simple questions from looping.
 
 Implemented tools: `rag_search`, `graph_query`, `sql_query`, `chip_compare`, `chip_select`, `bom_review`, `test_case_gen`, `design_rule`, `knowledge_search`, `report_export`.
 
@@ -161,6 +161,26 @@ Three providers: `KeycloakProvider`, `DingTalkProvider`, `FeishuProvider` — al
 ### TraceContext
 
 Every request gets a `trace_id` (from `X-Request-ID` header or auto-generated). Call `trace.record_stage(name, metadata)` in each processing step. Output: `logs/traces.jsonl`. Import from `src/observability/trace_context.py`.
+
+### RAG Evaluation Closed Loop (`src/evaluation/`, Phase 12)
+
+8-metric evaluation suite: `faithfulness`, `answer_relevancy`, `context_precision`, `context_recall`, `numeric_alignment`, `citation_coverage`, `latency_p95`, `cost_per_query`. Components:
+- `judge.py` — LLM-as-judge (router model `qwen3-1.7b` by default, switchable to primary)
+- `online_sampler.py` — samples 5% of live traffic into eval queue
+- `runner.py` / `batch_runner.py` — golden-set + trace replay
+- `golden.py` — 15-record `data/golden_qa.jsonl`
+- `aggregator.py` + `storage.py` — JSONL persistence to `reports/eval/`
+- `cli.py` — `python -m src.evaluation.cli run --golden|--traces [--judge router|primary] [--limit N]`
+
+Routers: `/api/v1/evaluations/*`, `/api/v1/golden/*`, `/api/v1/traces/*`. Frontend dashboards: `EvaluationsView.vue` (8 tabs), `TracesView.vue`.
+
+### Grounding & Anti-Hallucination (`src/evaluation/grounding.py`, Phase 12.1)
+
+Two-stage gate runs after every Agent answer:
+1. **Retrieval quality gate** — abstain if `len(citations) < min_citations` or top score < threshold
+2. **Numeric alignment** — regex-extracts every numeric claim (30+ unit families: MHz/GHz, mA/uA, °C, V, GB/s, …); each must trace back to a citation
+
+Early-stop sentinels (`token_budget_exhausted`, `max_iterations`) force abstain immediately so users see a structured Chinese fallback (`_early_stop_answer` in `orchestrator.py`) instead of a stub English string. Hot-config under `grounding:` in settings.yaml (enabled, min_citations, min_top_score, max_unsupported_ratio).
 
 ### Configuration
 

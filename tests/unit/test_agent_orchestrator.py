@@ -250,6 +250,9 @@ class TestAgentOrchestrator:
         result = await orch.run("test max iter")
         assert result.stopped_reason == "max_iterations"
         assert result.iterations == 3
+        # Phase 12.1: actionable Chinese fallback message
+        assert "暂无法给出可靠答案" in result.answer
+        assert "最大迭代次数" in result.answer
 
     @pytest.mark.asyncio
     async def test_token_budget_exhaustion(self) -> None:
@@ -262,6 +265,9 @@ class TestAgentOrchestrator:
         orch = AgentOrchestrator(llm, _make_registry(FakeSearchTool()), config=config)
         result = await orch.run("big query")
         assert result.stopped_reason == "token_budget_exhausted"
+        # Phase 12.1: actionable Chinese fallback message
+        assert "暂无法给出可靠答案" in result.answer
+        assert "token 预算" in result.answer
 
     @pytest.mark.asyncio
     async def test_token_tracking(self) -> None:

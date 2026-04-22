@@ -61,6 +61,14 @@ export interface LoginResponse {
   expires_in: number
 }
 
+export interface RegisterRequest {
+  username: string
+  password: string
+  email?: string
+  department?: string
+  role?: string
+}
+
 // ---- Documents (aligned with src/api/routers/documents.py) ----
 
 /** Response from POST /api/v1/documents/upload */

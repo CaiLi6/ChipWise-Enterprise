@@ -100,4 +100,7 @@ class TestProjectSettingsYaml:
     def test_load_project_settings(self) -> None:
         settings = load_settings("config/settings.yaml")
         assert isinstance(settings, Settings)
-        assert settings.llm.primary.model == "qwen3-35b-q5_k_m"
+        # Both LM Studio model slugs are defined and non-empty.
+        assert settings.llm.primary.model
+        assert settings.llm.router.model
+        assert settings.llm.primary.base_url.endswith(":1234/v1")

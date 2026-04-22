@@ -61,16 +61,29 @@ class MilvusStore(BaseVectorStore):
         col = Collection(collection)
         data = []
         for r in records:
+            # The live schema keys the chunk to `chip_id` (INT64), not a
+            # string `doc_id`. Coerce via metadata override, falling back
+            # to parsing doc_id as int when possible.
+            chip_id: int = int(r.metadata.get("chip_id", 0) or 0)
+            if not chip_id:
+                try:
+                    chip_id = int(r.doc_id)
+                except (TypeError, ValueError):
+                    chip_id = 0
             row: dict[str, Any] = {
                 "chunk_id": r.chunk_id,
-                "doc_id": r.doc_id,
+                "chip_id": chip_id,
                 "content": r.content,
                 "dense_vector": r.dense_vector,
+                "part_number": r.metadata.get("part_number", ""),
+                "manufacturer": r.metadata.get("manufacturer", ""),
+                "doc_type": r.metadata.get("doc_type", "datasheet"),
+                "page": int(r.metadata.get("page", 0) or 0),
+                "section": r.metadata.get("section", ""),
+                "collection": r.metadata.get("collection", collection),
             }
             if r.sparse_vector:
                 row["sparse_vector"] = r.sparse_vector
-            if r.metadata:
-                row.update(r.metadata)
             data.append(row)
 
         result = col.upsert(data)
@@ -92,7 +105,7 @@ class MilvusStore(BaseVectorStore):
             param={"metric_type": "COSINE", "params": {"ef": 128}},
             limit=top_k,
             expr=expr or None,
-            output_fields=["chunk_id", "doc_id", "content"],
+            output_fields=["chunk_id", "chip_id", "part_number", "page", "section", "content"],
         )
 
         return self._parse_search_results(results)
@@ -145,9 +158,9 @@ class MilvusStore(BaseVectorStore):
 
         results = col.hybrid_search(
             reqs=[dense_req, sparse_req],
-            ranker=RRFRanker(k=60),
+            rerank=RRFRanker(k=60),
             limit=top_k,
-            output_fields=["chunk_id", "doc_id", "content"],
+            output_fields=["chunk_id", "chip_id", "part_number", "page", "section", "content"],
         )
 
         return self._parse_search_results(results)
@@ -166,7 +179,10 @@ class MilvusStore(BaseVectorStore):
         col = Collection(collection)
         col.load()
         expr = f'chunk_id in {ids}'
-        results = col.query(expr=expr, output_fields=["chunk_id", "doc_id", "content"])
+        results = col.query(
+            expr=expr,
+            output_fields=["chunk_id", "chip_id", "part_number", "page", "section", "content"],
+        )
         return results  # type: ignore[no-any-return]
 
     async def health_check(self) -> bool:
@@ -204,10 +220,17 @@ class MilvusStore(BaseVectorStore):
             for hit in hits:
                 entity = hit.entity if hasattr(hit, "entity") else {}
                 fields = entity.fields if hasattr(entity, "fields") else (entity if isinstance(entity, dict) else {})
+                page_val = fields.get("page")
                 parsed.append(RetrievalResult(
                     chunk_id=fields.get("chunk_id", str(hit.id)),
-                    doc_id=fields.get("doc_id", ""),
+                    doc_id=str(fields.get("chip_id", "") or fields.get("doc_id", "")),
                     content=fields.get("content", ""),
                     score=hit.score if hasattr(hit, "score") else 0.0,
+                    source=fields.get("part_number", ""),
+                    page_number=int(page_val) if page_val not in (None, "", 0) else None,  # type: ignore[arg-type]
+                    metadata={
+                        "part_number": fields.get("part_number", ""),
+                        "section": fields.get("section", ""),
+                    },
                 ))
         return parsed

@@ -141,6 +141,17 @@ export const useQueryStore = defineStore('query', () => {
     }
   }
 
+  function setLastCitations(citations: Citation[]) {
+    const s = currentSession.value
+    if (!s) return
+    const last = s.messages[s.messages.length - 1]
+    if (last && last.role === 'assistant') {
+      last.citations = citations
+      s.updatedAt = Date.now()
+      schedulePersist()
+    }
+  }
+
   function clearCurrent() {
     const s = currentSession.value
     if (!s) return
@@ -162,6 +173,7 @@ export const useQueryStore = defineStore('query', () => {
     deleteSession,
     addMessage,
     appendToLast,
+    setLastCitations,
     clearCurrent,
   }
 })

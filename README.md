@@ -4,6 +4,8 @@
 
 **ChipWise Enterprise** 基于 **Agentic RAG**（ReAct Agent + Tool Calling）和 **Graph RAG**（Kùzu 知识图谱），为芯片工程师提供自然语言查询、芯片对比、BOM 审查与测试用例生成能力。所有推理在本地单机（AMD Ryzen AI 395，128 GB RAM）运行，通过 LM Studio 驱动，零数据外泄。
 
+> Architecture spec: `docs/ENTERPRISE_DEV_SPEC.md` **v5.7** — 含 8 指标 RAG 评估闭环、Markdown/KaTeX 渲染、BM25 可插拔稀疏检索（Phase 12），以及数字对齐校验 + 拒答机制（Phase 12.1）。
+
 ---
 
 ## 核心特性
@@ -16,6 +18,8 @@
 | 选型推荐 | 描述需求，Agent 自动筛选并排序候选芯片 |
 | 测试用例生成 | 基于数据手册和勘误，自动生成结构化测试用例并导出 Excel |
 | 知识库 | 团队共享工程笔记，语义搜索快速检索 |
+| **RAG 质量评估** | 8 指标在线 + 离线评估闭环，`/evaluations` 仪表板，黄金集 A/B 回放 |
+| **幻觉抑制** | 数字对齐校验（30+ 单位族）+ 检索质量闸自动拒答 |
 | 本地部署 | 无需云服务，所有数据留在内网 |
 | SSO 集成 | 支持 Keycloak、钉钉、飞书企业登录 |
 
@@ -29,7 +33,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 2  FastAPI Gateway :8080  JWT · Rate Limit · CORS     │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 3  Agent Orchestrator  ReAct (max 5 iter, 8192 tok)  │
+│  Layer 3  Agent Orchestrator  ReAct (max 6 iter, 40 960 tok) │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 4  Core Services  QueryRewriter · ConvManager · Cache │
 ├─────────────────────────────────────────────────────────────┤

@@ -45,7 +45,7 @@ async def _create_db_pool(settings: Settings) -> Any:
     """Create an asyncpg connection pool. Returns None on failure."""
     global _db_pool
     try:
-        import asyncpg  # type: ignore[import-not-found]
+        import asyncpg  # type: ignore[import-untyped,import-not-found]
 
         db = settings.database
         _db_pool = await asyncpg.create_pool(

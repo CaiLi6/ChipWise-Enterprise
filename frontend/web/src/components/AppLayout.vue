@@ -2,7 +2,7 @@
 import { useRouter, useRoute } from 'vue-router'
 import { useLayoutStore } from '@/stores/layout'
 import { useQueryStore } from '@/stores/query'
-import { Search, DataAnalysis, Document, Plus, Close } from '@element-plus/icons-vue'
+import { Search, DataAnalysis, Document, Plus, Close, Histogram, TrendCharts } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -82,6 +82,14 @@ function handleDeleteSession(id: string) {
         <el-menu-item index="/documents">
           <el-icon><Document /></el-icon>
           <template #title>文档管理</template>
+        </el-menu-item>
+        <el-menu-item index="/traces">
+          <el-icon><Histogram /></el-icon>
+          <template #title>Trace 查看器</template>
+        </el-menu-item>
+        <el-menu-item index="/evaluations">
+          <el-icon><TrendCharts /></el-icon>
+          <template #title>RAG 评估</template>
         </el-menu-item>
       </el-menu>
 

@@ -134,6 +134,11 @@ class ToolRegistry:
                     and obj is not BaseTool
                     and not inspect.isabstract(obj)
                 ):
+                    # Skip classes that are already manually registered
+                    # (e.g., ones requiring injected dependencies)
+                    if any(isinstance(t, obj) for t in self._tools.values()):
+                        logger.debug("Skipping already-registered class: %s", obj.__name__)
+                        continue
                     try:
                         instance = obj()
                     except Exception:

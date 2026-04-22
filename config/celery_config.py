@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-# Broker & backend
-broker_url = "redis://localhost:6379/0"
-result_backend = "redis://localhost:6379/1"
+import os
+from urllib.parse import quote
+
+_REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+_REDIS_PORT = os.environ.get("REDIS_PORT", "6379")
+_REDIS_PW = os.environ.get("REDIS_PASSWORD", "")
+_REDIS_AUTH = f":{quote(_REDIS_PW)}@" if _REDIS_PW else ""
+
+broker_url = f"redis://{_REDIS_AUTH}{_REDIS_HOST}:{_REDIS_PORT}/0"
+result_backend = f"redis://{_REDIS_AUTH}{_REDIS_HOST}:{_REDIS_PORT}/1"
 
 # Serialization
 task_serializer = "json"

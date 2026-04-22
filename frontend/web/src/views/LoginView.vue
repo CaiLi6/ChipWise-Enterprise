@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { getSSOLoginURL } from '@/api/auth'
 
@@ -11,17 +13,23 @@ const rememberMe = ref(false)
 const loading = ref(false)
 const error = ref('')
 
+const ssoEnabled = import.meta.env.VITE_SSO_ENABLED !== 'false'
+
 async function handleLogin() {
+  if (!form.value.username || !form.value.password) {
+    error.value = '请输入用户名和密码'
+    ElMessage.warning('请输入用户名和密码')
+    return
+  }
   loading.value = true
   error.value = ''
   try {
     await auth.login(form.value)
+    ElMessage.success('登录成功')
     const redirect = router.currentRoute.value.query.redirect as string
     router.push(redirect || '/query')
-  } catch (_e: unknown) {
-    if (import.meta.env.DEV) {
-      // Mock login in dev mode — must update the Pinia store refs,
-      // not just localStorage, so the route guard sees isLoggedIn=true
+  } catch (e: unknown) {
+    if (import.meta.env.DEV && !(axios.isAxiosError(e) && e.response)) {
       const mockUser = form.value.username || 'dev'
       auth.token = 'dev-mock-token'
       auth.username = mockUser
@@ -31,13 +39,29 @@ async function handleLogin() {
       router.push(redirect || '/query')
       return
     }
-    error.value = '登录失败，请检查用户名和密码'
+    let msg = '登录失败，请检查用户名和密码'
+    if (axios.isAxiosError(e)) {
+      if (e.response) {
+        const detail = e.response.data?.detail
+        if (e.response.status === 401) msg = '用户名或密码错误'
+        else if (e.response.status === 503) msg = '后端数据库暂不可用，请稍后重试'
+        else if (typeof detail === 'string') msg = detail
+      } else if (e.request) {
+        msg = `无法连接后端 (${import.meta.env.VITE_API_BASE_URL || ''})，请确认服务是否启动`
+      }
+    }
+    error.value = msg
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }
 }
 
 function handleSSO(provider: string) {
+  if (!ssoEnabled) {
+    ElMessage.info('本地部署未配置 SSO，请使用账号密码登录')
+    return
+  }
   window.location.href = getSSOLoginURL(provider)
 }
 </script>
@@ -83,6 +107,7 @@ function handleSSO(provider: string) {
 
         <!-- 钉钉扫码授权登录 -->
         <el-button
+          v-if="ssoEnabled"
           class="dingtalk-btn"
           size="large"
           @click="handleSSO('dingtalk')"
@@ -95,10 +120,10 @@ function handleSSO(provider: string) {
         </el-button>
       </el-form>
 
-      <el-divider style="margin: 20px 0 16px">其他登录方式</el-divider>
+      <el-divider v-if="ssoEnabled" style="margin: 20px 0 16px">其他登录方式</el-divider>
 
       <!-- Keycloak + Feishu 胶囊按钮 -->
-      <div style="display: flex; gap: 10px; justify-content: center">
+      <div v-if="ssoEnabled" style="display: flex; gap: 10px; justify-content: center">
         <button class="sso-pill sso-keycloak" @click="handleSSO('keycloak')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-right:5px">
             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>

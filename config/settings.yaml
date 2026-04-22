@@ -7,7 +7,7 @@ llm:
   primary:
     provider: openai_compatible
     base_url: "http://localhost:1234/v1"
-    model: "qwen3-35b-q5_k_m"
+    model: "qwen/qwen3.5-35b-a3b"
     api_key: "lm-studio"
     max_tokens: 4096
     temperature: 0.1
@@ -16,16 +16,16 @@ llm:
   router:
     provider: openai_compatible
     base_url: "http://localhost:1234/v1"
-    model: "qwen3-1.7b-q5_k_m"
+    model: "qwen3-1.7b"
     api_key: "lm-studio"
-    max_tokens: 256
+    max_tokens: 1024
     temperature: 0.0
-    timeout: 15
-    max_concurrent: 10
+    timeout: 60
+    max_concurrent: 4
 
 # --- Embedding (BGE-M3 FastAPI microservice) ---
 embedding:
-  provider: fastapi_remote
+  provider: bgem3
   base_url: "http://localhost:8001"
   model: "BAAI/bge-m3"
   dim: 1024
@@ -34,7 +34,7 @@ embedding:
 
 # --- Reranker (bce-reranker FastAPI microservice) ---
 rerank:
-  provider: fastapi_remote
+  provider: bce
   base_url: "http://localhost:8002"
   model: "maidalun1020/bce-reranker-base_v1"
   top_k: 10
@@ -76,6 +76,30 @@ retrieval:
   top_k_rerank: 10
   rrf_k: 60
 
+# --- Grounding (post-answer numeric verification + retrieval gate) ---
+grounding:
+  enabled: true
+  min_citations: 2          # abstain if fewer citations
+  min_top_score: 0.35       # abstain if top-1 rerank score below this
+  min_mean_score: 0.25      # abstain if mean rerank score below this
+  max_unsupported_ratio: 0.40   # abstain if >40% numeric facts unverified
+  numeric_rel_tol: 0.01     # 1% relative tolerance on number match
+
+# --- RAG Evaluation (LLM-as-judge + online sampling + golden batches) ---
+evaluation:
+  enabled: true
+  online_sample_rate: 0.10  # fraction of queries scored asynchronously
+  judge_role: router        # "router" (qwen3-1.7b) or "primary"
+  default_metrics:          # metrics computed for every sampled trace
+    - faithfulness
+    - answer_relevancy
+    - context_precision
+    - context_recall
+    - citation_coverage
+    - latency_score
+    - citation_diversity
+    - agent_efficiency
+
 # --- Semantic Cache ---
 cache:
   enabled: true
@@ -92,11 +116,11 @@ rate_limit:
 
 # --- Agent Orchestrator ---
 agent:
-  max_iterations: 5
-  max_total_tokens: 8192
+  max_iterations: 6
+  max_total_tokens: 40960
   parallel_tool_calls: true
   temperature: 0.1
-  tool_timeout: 30.0
+  tool_timeout: 45.0
 
 # --- Graph Store ---
 graph_store:
@@ -146,8 +170,8 @@ auth:
       "default": "viewer"
   jwt:
     algorithm: "RS256"
-    private_key_path: "/run/secrets/jwt-private.pem"
-    public_key_path: "/run/secrets/jwt-public.pem"
+    private_key_path: "./secrets/jwt-private.pem"
+    public_key_path: "./secrets/jwt-public.pem"
     access_token_expire_minutes: 30
     refresh_token_expire_days: 7
   local_fallback:

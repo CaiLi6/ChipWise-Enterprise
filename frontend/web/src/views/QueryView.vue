@@ -31,6 +31,14 @@ function handleLogout() {
 // Scroll to bottom whenever the user switches to a different session
 watch(() => store.currentSessionId, () => scrollToBottom())
 
+function replaceLastAssistant(text: string) {
+  const msgs = store.messages
+  const last = msgs[msgs.length - 1]
+  if (last && last.role === 'assistant') {
+    last.content = text
+  }
+}
+
 async function handleSend() {
   const text = input.value.trim()
   if (!text || store.isStreaming) return
@@ -41,33 +49,23 @@ async function handleSend() {
   input.value = ''
   scrollToBottom()
 
-  try {
-    streamQuery(
-      { query: text, session_id: store.currentSessionId },
-      (chunk) => {
-        store.appendToLast(chunk)
-        scrollToBottom()
-      },
-      () => {
-        store.isStreaming = false
-      },
-    )
-  } catch (err: unknown) {
-    store.isStreaming = false
-    const status = (err as { response?: { status?: number } })?.response?.status
-    if (status === 503) {
-      store.appendToLast('')
-      const msgs = store.messages
-      msgs[msgs.length - 1] = {
-        ...msgs[msgs.length - 1],
-        role: 'assistant',
-        content: '⚠️ 后端 LLM 服务暂时不可用（503），请稍后重试',
-      }
-    } else {
-      store.appendToLast('查询失败，请重试')
-    }
-    scrollToBottom()
-  }
+  await streamQuery(
+    { query: text, session_id: store.currentSessionId },
+    (chunk) => {
+      store.appendToLast(chunk)
+      scrollToBottom()
+    },
+    (citations) => {
+      if (citations && citations.length) store.setLastCitations(citations)
+      store.isStreaming = false
+      scrollToBottom()
+    },
+    (message) => {
+      replaceLastAssistant(message)
+      store.isStreaming = false
+      scrollToBottom()
+    },
+  )
 }
 </script>
 

@@ -21,6 +21,62 @@ def client() -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
+# In-memory fake users store, accessed by both the fake _pg_conn and tests
+# that need to inspect stored hashes.
+_FAKE_USERS: dict[str, dict] = {}
+
+
+@pytest.fixture(autouse=True)
+def _fake_pg(monkeypatch):
+    """Patch ``_pg_conn`` with an in-memory fake mimicking the users table."""
+    _FAKE_USERS.clear()
+
+    class _FakeCursor:
+        def __init__(self) -> None:
+            self._last: tuple | None = None
+
+        def execute(self, sql: str, params: tuple = ()) -> None:
+            sql_norm = " ".join(sql.split()).lower()
+            if sql_norm.startswith("select id from users where username"):
+                self._last = (1,) if params[0] in _FAKE_USERS else None
+            elif sql_norm.startswith("insert into users"):
+                username, _email, pw_hash, role, dept, *_ = params
+                _FAKE_USERS[username] = {
+                    "username": username, "password_hash": pw_hash,
+                    "role": role, "department": dept,
+                }
+                self._last = None
+            elif sql_norm.startswith("select username, password_hash, role, department from users"):
+                u = _FAKE_USERS.get(params[0])
+                self._last = (
+                    (u["username"], u["password_hash"], u["role"], u["department"])
+                    if u else None
+                )
+            else:
+                self._last = None
+
+        def fetchone(self):
+            return self._last
+
+        def close(self) -> None:
+            pass
+
+    class _FakeConn:
+        def cursor(self) -> _FakeCursor:
+            return _FakeCursor()
+
+        def commit(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    import src.api.routers.auth as auth_mod
+    monkeypatch.setattr(auth_mod, "_pg_conn", lambda: _FakeConn())
+    yield
+    _FAKE_USERS.clear()
+
+
 @pytest.fixture(autouse=True)
 def reset_knowledge():
     import src.api.routers.knowledge as km
@@ -50,7 +106,6 @@ class TestA02CryptographicFailures:
     """A02: Passwords must not be stored in plaintext."""
 
     def test_password_hashed_on_register(self, client: TestClient) -> None:
-        import src.api.routers.auth as auth_mod
 
         resp = client.post("/api/v1/auth/register", json={
             "username": "testuser_a02",
@@ -62,7 +117,7 @@ class TestA02CryptographicFailures:
         assert resp.status_code == 200
 
         # Verify password is not stored in plaintext
-        user = auth_mod._users.get("testuser_a02")
+        user = _FAKE_USERS.get("testuser_a02")
         assert user is not None
         assert user["password_hash"] != "S3cur3P@ss!", "Password must not be stored in plaintext"
         # Hash should be significantly longer than the password
@@ -130,7 +185,7 @@ class TestA07AuthenticationFailures:
     def test_duplicate_registration_returns_409(self, client: TestClient) -> None:
         payload = {
             "username": "dup_user",
-            "password": "pass123",
+            "password": "password123",
             "email": "d@d.com",
             "department": "x",
             "role": "user",

@@ -1,9 +1,14 @@
 import axios from 'axios'
 import api from './client'
-import type { LoginRequest, LoginResponse } from '@/types/api'
+import type { LoginRequest, LoginResponse, RegisterRequest } from '@/types/api'
 
 export async function login(data: LoginRequest): Promise<LoginResponse> {
   const resp = await api.post<LoginResponse>('/api/v1/auth/login', data)
+  return resp.data
+}
+
+export async function register(data: RegisterRequest): Promise<LoginResponse> {
+  const resp = await api.post<LoginResponse>('/api/v1/auth/register', data)
   return resp.data
 }
 
