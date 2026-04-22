@@ -5,6 +5,7 @@ Requires: docker-compose up -d
 
 from __future__ import annotations
 
+import os
 import subprocess
 
 import pytest
@@ -34,11 +35,22 @@ class TestDockerInfraHealth:
         assert result.returncode == 0, f"Milvus not healthy: {result.stderr}"
 
     def test_redis_healthy(self) -> None:
-        result = subprocess.run(
-            ["docker", "exec", "chipwise-redis", "redis-cli", "ping"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        # Load REDIS_PASSWORD from .env (compose uses it via --requirepass) if not in env.
+        redis_pw = os.environ.get("REDIS_PASSWORD")
+        if not redis_pw:
+            env_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env",
+            )
+            if os.path.exists(env_path):
+                with open(env_path) as fh:
+                    for line in fh:
+                        if line.startswith("REDIS_PASSWORD="):
+                            redis_pw = line.split("=", 1)[1].strip()
+                            break
+        cmd = ["docker", "exec", "chipwise-redis", "redis-cli"]
+        if redis_pw:
+            cmd += ["-a", redis_pw]
+        cmd.append("ping")
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         assert result.returncode == 0, f"Redis not responding: {result.stderr}"
         assert "PONG" in result.stdout

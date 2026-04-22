@@ -28,11 +28,12 @@ class TestMilvusCollections:
 
     def test_datasheet_chunks_field_count(self) -> None:
         col = Collection("datasheet_chunks")
-        assert len(col.schema.fields) == 11
+        # 11 base fields + 1 BM25 sparse vector field added in Phase 12 (settings.retrieval.sparse_method=bm25)
+        assert len(col.schema.fields) in (11, 12)
 
     def test_knowledge_notes_field_count(self) -> None:
         col = Collection("knowledge_notes")
-        assert len(col.schema.fields) == 8
+        assert len(col.schema.fields) in (8, 9)
 
     def test_datasheet_chunks_dense_dim(self) -> None:
         col = Collection("datasheet_chunks")

@@ -41,34 +41,22 @@ def _resolve_judge_llm(judge: str) -> tuple[Any, str]:
     from src.libs.llm.factory import LLMFactory
 
     settings = get_settings()
-    cfg = settings.llm.router if judge == "router" else settings.llm.primary
-    llm = LLMFactory.create(cfg.model_dump())
+    role = "router" if judge == "router" else "primary"
+    cfg = settings.llm.router if role == "router" else settings.llm.primary
+    llm = LLMFactory.create(settings.model_dump(), role=role)
     return llm, cfg.model
 
 
 async def _run_golden(judge: str, limit: int | None) -> dict[str, Any]:
-    from src.agent.orchestrator import AgentConfig, AgentOrchestrator
-    from src.agent.prompt_builder import PromptBuilder
-    from src.agent.tool_registry import ToolRegistry
-    from src.api.dependencies import get_settings
+    from src.api.routers.query import _get_or_create_orchestrator
     from src.evaluation.batch_runner import run_batch_on_golden
-    from src.libs.llm.factory import LLMFactory
 
-    settings = get_settings()
     judge_llm, judge_name = _resolve_judge_llm(judge)
-
-    primary_llm = LLMFactory.create(settings.llm.primary.model_dump())
-    registry = ToolRegistry()
-    registry.discover()
-    PromptBuilder()
-    orch = AgentOrchestrator(
-        llm=primary_llm,
-        tool_registry=registry,
-        config=AgentConfig(
-            max_iterations=settings.agent.max_iterations,
-            max_total_tokens=settings.agent.max_total_tokens,
-        ),
-    )
+    orch = _get_or_create_orchestrator()
+    if orch is None:
+        raise RuntimeError(
+            "Orchestrator unavailable — LM Studio / Milvus / embedding service must be reachable",
+        )
     batch = await run_batch_on_golden(
         judge_llm=judge_llm,
         orchestrator=orch,

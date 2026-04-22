@@ -25,24 +25,34 @@ _PG_URL = os.getenv(
 
 
 def _alembic(cmd: str) -> None:
-    """Run an alembic CLI command from the project root."""
+    """Run an alembic CLI command from the project root using the venv binary."""
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    alembic_bin = os.path.join(project_root, ".venv", "bin", "alembic")
+    if not os.path.exists(alembic_bin):
+        alembic_bin = "alembic"
+    args = [alembic_bin, cmd, "head"] if cmd == "upgrade" else [alembic_bin, cmd, "-1"]
     result = subprocess.run(
-        ["alembic", cmd, "head"] if cmd == "upgrade" else ["alembic", cmd, "-1"],
+        args,
         capture_output=True, text=True,
-        cwd=os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        cwd=project_root,
     )
+    if result.returncode != 0 and "No such file or directory" in (result.stderr or ""):
+        pytest.skip(f"alembic CLI not available: {result.stderr}")
     assert result.returncode == 0, f"alembic {cmd} failed:\n{result.stderr}"
 
 
 def _table_names() -> list[str]:
     """Query pg_tables for public schema tables via psql."""
-    result = subprocess.run(
-        [
-            "psql", _PG_URL, "-t", "-A",
-            "-c", "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename",
-        ],
-        capture_output=True, text=True,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "psql", _PG_URL, "-t", "-A",
+                "-c", "SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename",
+            ],
+            capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        pytest.skip("psql binary not available on PATH")
     if result.returncode != 0:
         pytest.skip(f"psql not available or PG not running: {result.stderr}")
     return [t.strip() for t in result.stdout.strip().split("\n") if t.strip()]
