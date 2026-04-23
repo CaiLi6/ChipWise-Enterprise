@@ -476,3 +476,6 @@
 - `WORKLOG.md` 中之前 Claude 提的 evaluation baseline 重跑，等参数入库稳定后再做。
 
 **已提交并推送**：见后续 commit。
+
+**最终提交**：`5ddc284 feat(ingestion): wire schema-driven GraphRAG into upload pipeline`，已推 origin/main。
+
