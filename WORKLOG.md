@@ -393,3 +393,26 @@
 2. 暂未上传字体（Gemini 用 Google Sans）—— 当前用系统 -apple-system stack，效果接近但不完全一致。如要完全对齐可加 `Inter` 或 `Google Sans` web font。
 3. 渐变 hero 文字在 Safari < 14 可能不显示（依赖 -webkit-background-clip）—— 主流环境 OK。
 4. 暂未做"暗色模式"——Gemini 有，ChipWise 当前所有页都是明色。
+
+### [User] 2026-04-23 — 提问：系统真实运行情况是 agentic agent + graph rag 吗？
+
+### [Copilot] 2026-04-23 — 真实运行模式核查（80 条 trace + 三库行数）
+**结论**：架构上是 Agentic + GraphRAG，**运行时只算 Agentic Vector-RAG**——因为知识图谱实际上是空的。
+
+**实测证据**：
+
+1. **Agentic — 真**：80 条 trace 里 Agent 工具调用分布：rag_search=22、sql_query=6、graph_query=5、knowledge_search=1。ReAct 循环、动态选工具、grounding 闸门、早停哨兵全部在跑。
+2. **Graph RAG — 假**：
+   - PG 行数：`chips`=0 / `chip_parameters`=0 / `errata`=0 / `design_rules`=0 / `chip_alternatives`=0；只有 `documents`=3。
+   - Kùzu 图（从 PG 同步）：只剩 3 个 Document 节点，无 Chip / Parameter 节点 / 无边。
+   - Agent 每次都试 sql_query / graph_query，但永远空集，最终 fallback rag_search。
+3. **Vector RAG — 真**：Milvus `datasheet_chunks`=180 行（PH2A106FLG900 兼容指南 + DS1101 + STM）。这是唯一真在工作的检索通道——也是为什么基线拒答率 49%、context_precision 0.08 的根因。
+
+**根因链**：上传 PDF 的 ingestion 走完了"切片+embed→Milvus"，但**LLM 参数提取（`src/ingestion/parameter_extractor.py`）没把结构化字段写回 PG**。PG 空 ⇒ Kùzu 同步出的图也空 ⇒ Graph RAG 名存实亡。
+
+**升级路径**（按 ROI 排）：
+1. 修 ingestion 参数提取，让 PG `chip_parameters` 真的有数据（这就是之前 WORKLOG 里的 task #45）。
+2. 触发 PG → Kùzu 同步，建立 Chip→HAS_PARAMETER→Parameter 边。
+3. 重跑基线 ——`context_precision` 预期从 0.08 跳到 0.4+，因为 Agent 终于能 `SELECT value FROM chip_parameters WHERE name='DSP数量'` 直击答案，而非从 chunks 猜。
+
+**用户下一步动作**：等用户决定是否立即着手做参数入库链路。
