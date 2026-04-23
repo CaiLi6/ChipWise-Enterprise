@@ -63,10 +63,22 @@ class ParamExtractor:
 
         try:
             response = await self._llm.generate(
-                prompt, temperature=0.0, max_tokens=2000
+                prompt, temperature=0.0, max_tokens=4000
             )
             raw_output = response.text if hasattr(response, "text") else str(response)
+            if not raw_output:
+                usage = getattr(response, "usage", {}) or {}
+                logger.warning(
+                    "LLM returned EMPTY content for param extraction (chip=%s page=%s, table_rows=%d, usage=%s)",
+                    chip_part_number, page, len(table_rows), usage,
+                )
+                return []
             params = self._parse_llm_output(raw_output)
+            if not params and raw_output:
+                logger.info(
+                    "Param extractor produced 0 params; raw LLM output (first 400 chars): %s",
+                    raw_output[:400].replace("\n", " "),
+                )
 
             # Validate with StructuredOutputValidator if available
             if self._validator and params:
@@ -99,9 +111,11 @@ class ParamExtractor:
 
     @staticmethod
     def _parse_llm_output(output: str) -> list[dict[str, Any]]:
-        """Robust JSON parsing: handles markdown code blocks, partial JSON."""
-        # Strip markdown code block
+        """Robust JSON parsing: handles markdown code blocks, partial JSON, qwen3 <think> tags."""
         output = output.strip()
+        # Strip qwen3 chain-of-thought wrapper
+        output = re.sub(r"<think>.*?</think>\s*", "", output, flags=re.DOTALL).strip()
+        # Strip markdown code block
         code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", output, re.DOTALL)
         if code_block:
             output = code_block.group(1).strip()
@@ -117,15 +131,27 @@ class ParamExtractor:
         except json.JSONDecodeError:
             pass
 
-        # Try to find JSON array in the output
-        arr_match = re.search(r"\[.*\]", output, re.DOTALL)
+        # Try to find JSON array in the output (greedy on outermost brackets)
+        arr_match = re.search(r"\[\s*[\{\[].*[\}\]]\s*\]", output, re.DOTALL)
         if arr_match:
             try:
                 return json.loads(arr_match.group(0))  # type: ignore[no-any-return]
             except json.JSONDecodeError:
                 pass
 
-        logger.warning("Could not parse LLM output as JSON")
+        # Last resort: find a single object
+        obj_match = re.search(r"\{.*\}", output, re.DOTALL)
+        if obj_match:
+            try:
+                data = json.loads(obj_match.group(0))
+                if isinstance(data, dict) and "parameters" in data:
+                    return data["parameters"]  # type: ignore[no-any-return]
+                if isinstance(data, dict):
+                    return [data]
+            except json.JSONDecodeError:
+                pass
+
+        logger.warning("Could not parse LLM output as JSON; first 200 chars: %s", output[:200])
         return []
 
     async def store_params(

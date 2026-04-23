@@ -84,8 +84,10 @@ def _get_or_create_orchestrator() -> Any:
             logger.warning("CoreReranker init failed", exc_info=True)
 
         try:
-            graph_store = GraphStoreFactory.create(cfg)
-            graph_search = GraphSearch(graph_store)
+            from src.api.dependencies import get_graph_store
+            graph_store = get_graph_store(settings)
+            if graph_store is not None:
+                graph_search = GraphSearch(graph_store)
         except Exception:
             logger.warning("GraphSearch init failed", exc_info=True)
 

@@ -25,6 +25,7 @@ class LLMEndpointSettings(BaseModel):
 class LLMSettings(BaseModel):
     primary: LLMEndpointSettings = Field(default_factory=LLMEndpointSettings)
     router: LLMEndpointSettings = Field(default_factory=LLMEndpointSettings)
+    extractor: LLMEndpointSettings | None = None
 
 
 class EmbeddingSettings(BaseModel):

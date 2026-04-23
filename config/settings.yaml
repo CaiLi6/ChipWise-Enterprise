@@ -22,6 +22,19 @@ llm:
     temperature: 0.0
     timeout: 60
     max_concurrent: 4
+  extractor:
+    # Non-reasoning model used for offline ingestion structured extraction
+    # (parameters, design rules, errata, alternatives). Reasoning models
+    # like qwen3 burn the entire token budget on hidden CoT and emit
+    # no JSON; gemma-4-31b emits clean JSON immediately.
+    provider: openai_compatible
+    base_url: "http://localhost:1234/v1"
+    model: "gemma-4-31b-it"
+    api_key: "lm-studio"
+    max_tokens: 3000
+    temperature: 0.0
+    timeout: 600
+    max_concurrent: 1
 
 # --- Embedding (BGE-M3 FastAPI microservice) ---
 embedding:

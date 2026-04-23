@@ -64,3 +64,4 @@ reports/*.html
 
 # Playwright test results
 frontend/web/test-results/
+data/kuzu.wal

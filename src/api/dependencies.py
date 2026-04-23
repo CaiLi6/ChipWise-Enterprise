@@ -193,6 +193,36 @@ def get_reranker_client(settings: Settings = Depends(get_settings)) -> RerankerC
     )
 
 
+# ── Kùzu graph store (process-wide singleton) ───────────────────────
+#
+# Kùzu is embedded; a single process must hold exactly one writable
+# Database instance to avoid IO lock contention. Both the Agent (read
+# via GraphQueryTool) and the ingestion path (write via
+# GraphSynchronizer) must share this instance.
+
+_graph_store: Any = None
+
+
+def get_graph_store(settings: Settings | None = None) -> Any:
+    """Return the singleton ``BaseGraphStore`` (lazy, may return None on failure).
+
+    Not a FastAPI Depends — call it directly from any code path that
+    needs the shared graph instance.
+    """
+    global _graph_store
+    if _graph_store is not None:
+        return _graph_store
+    try:
+        from src.libs.graph_store.factory import GraphStoreFactory
+        cfg = (settings or get_settings()).model_dump()
+        _graph_store = GraphStoreFactory.create(cfg)
+        logger.info("KuzuGraphStore singleton created.")
+    except Exception as exc:
+        logger.warning("Failed to create graph store singleton: %s", exc)
+        _graph_store = None
+    return _graph_store
+
+
 # ── Lifespan ────────────────────────────────────────────────────────
 
 

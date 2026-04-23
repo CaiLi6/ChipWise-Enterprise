@@ -26,9 +26,19 @@ export async function getDocument(docId: number): Promise<DocumentMeta> {
 export interface IngestResult {
   doc_id: number
   chip_id: number
+  part_number?: string
   pages: number
   chunks: number
   status: string
+  kg_stats?: {
+    params: number
+    rules: number
+    errata: number
+    alternatives: number
+    kuzu_nodes: number
+    kuzu_edges: number
+    tables_processed: number
+  }
 }
 
 export async function ingestDocument(docId: number): Promise<IngestResult> {
@@ -77,5 +87,20 @@ export async function listDocumentChunks(docId: number, limit = 10): Promise<Doc
   const resp = await api.get<DocumentChunksResponse>(`/api/v1/documents/${docId}/chunks`, {
     params: { limit },
   })
+  return resp.data
+}
+
+export interface GraphStats {
+  doc_id: number
+  chip_id: number | null
+  filename: string
+  chunks: number
+  pg: { params: number; rules: number; errata: number; alternatives: number }
+  kuzu: { nodes: number; edges: number }
+  ingest_cached?: Record<string, number>
+}
+
+export async function getGraphStats(docId: number): Promise<GraphStats> {
+  const resp = await api.get<GraphStats>(`/api/v1/documents/${docId}/graph-stats`)
   return resp.data
 }

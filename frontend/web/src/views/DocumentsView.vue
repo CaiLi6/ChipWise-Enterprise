@@ -9,7 +9,9 @@ import {
   ingestAllDocuments,
   deleteDocument,
   listDocumentChunks,
+  getGraphStats,
   type DocumentChunk,
+  type GraphStats,
 } from '@/api/documents'
 import LoadingError from '@/components/LoadingError.vue'
 import type { DocumentMeta, DocumentListResponse } from '@/types/api'
@@ -27,12 +29,27 @@ const detailLoading = ref(false)
 const detailDoc = ref<DocumentMeta | null>(null)
 const detailChunks = ref<DocumentChunk[]>([])
 const detailChipId = ref<number | null>(null)
+const detailGraph = ref<GraphStats | null>(null)
+const graphStatsCache = ref<Record<number, GraphStats>>({})
+
+async function loadGraphStats(docId: number) {
+  try {
+    const stats = await getGraphStats(docId)
+    graphStatsCache.value[docId] = stats
+    return stats
+  } catch {
+    return null
+  }
+}
 
 async function fetchDocuments() {
   try {
     const resp: DocumentListResponse = await listDocuments()
     documents.value = resp.documents
     error.value = null
+    // Fetch graph stats in parallel for completed docs (best-effort)
+    const completed = resp.documents.filter(d => d.status === 'completed' && d.doc_id)
+    await Promise.all(completed.map(d => loadGraphStats(d.doc_id as number)))
   } catch (e: unknown) {
     const status = (e as { response?: { status?: number } })?.response?.status
     if (status === 503) {
@@ -118,10 +135,15 @@ async function handleDetail(row: DocumentMeta) {
   detailLoading.value = true
   detailChunks.value = []
   detailChipId.value = null
+  detailGraph.value = null
   try {
-    const resp = await listDocumentChunks(row.doc_id, 15)
-    detailChunks.value = resp.chunks
-    detailChipId.value = resp.chip_id
+    const [chunksResp, graph] = await Promise.all([
+      listDocumentChunks(row.doc_id, 15),
+      loadGraphStats(row.doc_id),
+    ])
+    detailChunks.value = chunksResp.chunks
+    detailChipId.value = chunksResp.chip_id
+    detailGraph.value = graph
   } catch {
     ElMessage.warning('块信息加载失败（文档可能尚未 ingestion）')
   } finally {
@@ -201,6 +223,28 @@ onUnmounted(() => {
             <span v-else style="color: #c0c4cc">-</span>
           </template>
         </el-table-column>
+        <el-table-column label="知识图谱" min-width="220">
+          <template #default="{ row }">
+            <div v-if="row.doc_id && graphStatsCache[row.doc_id]" class="kg-badge">
+              <span class="kg-pill kg-param" :title="`${graphStatsCache[row.doc_id].pg.params} 个参数`">
+                📊 {{ graphStatsCache[row.doc_id].pg.params }}
+              </span>
+              <span class="kg-pill kg-rule" :title="`${graphStatsCache[row.doc_id].pg.rules} 条设计规则`">
+                📐 {{ graphStatsCache[row.doc_id].pg.rules }}
+              </span>
+              <span class="kg-pill kg-errata" :title="`${graphStatsCache[row.doc_id].pg.errata} 条勘误`">
+                ⚠️ {{ graphStatsCache[row.doc_id].pg.errata }}
+              </span>
+              <span class="kg-pill kg-alt" :title="`${graphStatsCache[row.doc_id].pg.alternatives} 个替代芯片`">
+                ↔️ {{ graphStatsCache[row.doc_id].pg.alternatives }}
+              </span>
+              <span class="kg-pill kg-graph" :title="`Kùzu: ${graphStatsCache[row.doc_id].kuzu.nodes} 节点 / ${graphStatsCache[row.doc_id].kuzu.edges} 边`">
+                🕸️ {{ graphStatsCache[row.doc_id].kuzu.nodes }}n·{{ graphStatsCache[row.doc_id].kuzu.edges }}e
+              </span>
+            </div>
+            <span v-else style="color: #c0c4cc">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button
@@ -243,6 +287,18 @@ onUnmounted(() => {
           <el-descriptions-item label="处理时间">{{ detailDoc.metadata?.processed_at || '-' }}</el-descriptions-item>
         </el-descriptions>
 
+        <div v-if="detailGraph" style="margin-top: 18px">
+          <h4 style="margin: 0 0 10px 0">知识图谱统计</h4>
+          <div class="kg-grid">
+            <div class="kg-cell"><span>参数</span><b>{{ detailGraph.pg.params }}</b></div>
+            <div class="kg-cell"><span>设计规则</span><b>{{ detailGraph.pg.rules }}</b></div>
+            <div class="kg-cell"><span>勘误</span><b>{{ detailGraph.pg.errata }}</b></div>
+            <div class="kg-cell"><span>替代芯片</span><b>{{ detailGraph.pg.alternatives }}</b></div>
+            <div class="kg-cell"><span>Kùzu 节点</span><b>{{ detailGraph.kuzu.nodes }}</b></div>
+            <div class="kg-cell"><span>Kùzu 边</span><b>{{ detailGraph.kuzu.edges }}</b></div>
+          </div>
+        </div>
+
         <div style="margin-top: 20px">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px">
             <h4 style="margin: 0">索引块预览 <span style="color:#909399;font-weight:normal;font-size:12px">（前 {{ detailChunks.length }} 条）</span></h4>
@@ -265,3 +321,43 @@ onUnmounted(() => {
     </el-drawer>
   </div>
 </template>
+
+<style scoped>
+.kg-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.kg-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  line-height: 1.4;
+}
+.kg-param  { background: #eff6ff; color: #1d4ed8; border-color: #dbeafe; }
+.kg-rule   { background: #f0fdf4; color: #15803d; border-color: #dcfce7; }
+.kg-errata { background: #fef3c7; color: #92400e; border-color: #fde68a; }
+.kg-alt    { background: #fdf4ff; color: #a21caf; border-color: #f5d0fe; }
+.kg-graph  { background: #f3f4f6; color: #374151; border-color: #e5e7eb; }
+
+.kg-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.kg-cell {
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.kg-cell span { font-size: 12px; color: #6b7280; }
+.kg-cell b { font-size: 18px; color: #111827; margin-top: 2px; }
+</style>

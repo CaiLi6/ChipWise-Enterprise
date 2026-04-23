@@ -4,12 +4,19 @@ Includes a minimal on-demand ingestion pipeline: PDF text extraction →
 paragraph chunking → BGE-M3 embed → Milvus upsert. Runs synchronously in
 a thread pool (no Celery required) so the frontend can trigger ingestion
 from a button and see results in the list within seconds.
+
+In Phase A (2026-04-23) the pipeline was extended to also build the
+schema-driven knowledge graph: PG ``chips`` row + LLM-extracted
+``chip_parameters`` + ``design_rules`` + ``errata`` + ``chip_alternatives``
+followed by a Kùzu ``GraphSynchronizer`` sweep so ``graph_query`` and
+``sql_query`` agent tools have real data to return.
 """
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 import re
 from pathlib import Path
@@ -27,13 +34,26 @@ router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 ALLOWED_EXTENSIONS = {".pdf", ".xlsx"}
 
-CHIP_ID_OFFSET = 10_000  # synthetic chip_id = CHIP_ID_OFFSET + documents.id
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 EMBED_URL = "http://localhost:8001"
 MILVUS_HOST = "localhost"
 MILVUS_PORT = 19530
 MILVUS_COLLECTION = "datasheet_chunks"
+
+# Errata section heuristic (case-insensitive, matches CN + EN headings)
+_ERRATA_HEADING = re.compile(
+    r"(errata|勘误|勘误表|known\s+issues?|silicon\s+bug|known\s+limitations?)",
+    re.IGNORECASE,
+)
+_RULE_KEYWORDS = re.compile(
+    r"decoupl|layout|退耦|布局|thermal|散热|power.?seq|电源时序|"
+    r"注意|建议|recommend|caution|warning|ESD|clock|bypass",
+    re.IGNORECASE,
+)
+# Permissive part-number heuristic — must contain at least one digit so
+# we don't pick up plain capitalised words like "RECOMMENDED" or "WARNING".
+_PART_NUMBER = re.compile(r"\b([A-Z][A-Z0-9\-]{3,19}\d[A-Z0-9\-]*)\b")
 
 
 # ---------------------------------------------------------------------------
@@ -294,9 +314,406 @@ def _milvus_delete(chip_id: int) -> None:
     col.flush()
 
 
+async def _upsert_chip_row(
+    db_pool: Any, part_number: str, manufacturer: str, family: str
+) -> int:
+    """INSERT-or-UPDATE the chips row, returning its id."""
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO chips (part_number, manufacturer, family, status)
+            VALUES ($1, $2, $3, 'active')
+            ON CONFLICT (part_number) DO UPDATE SET
+                manufacturer = EXCLUDED.manufacturer,
+                family = COALESCE(EXCLUDED.family, chips.family),
+                updated_at = now()
+            RETURNING id
+            """,
+            part_number,
+            manufacturer,
+            family or None,
+        )
+        return int(row["id"])
+
+
+def _get_llm_singleton() -> Any:
+    """Lazy-create + cache a primary LLM client (qwen3 reasoning model)."""
+    global _llm_singleton
+    if _llm_singleton is not None:
+        return _llm_singleton
+    try:
+        from src.api.dependencies import get_settings
+        from src.libs.llm.factory import LLMFactory
+        cfg = get_settings().model_dump()
+        _llm_singleton = LLMFactory.create(cfg, role="primary")
+    except Exception:
+        logger.warning("LLM init failed during ingestion", exc_info=True)
+        _llm_singleton = None
+    return _llm_singleton
+
+
+def _get_extractor_llm() -> Any:
+    """Lazy-create + cache a non-reasoning LLM client for structured extraction.
+
+    qwen3 thinking models exhaust the token budget on hidden CoT and emit no
+    JSON for datasheet tables. We use ``llm.extractor`` (gemma-4-31b-it by
+    default) for parameter / rule / errata / alternative extraction.
+    Falls back to the primary LLM if the extractor role isn't configured.
+    """
+    global _extractor_singleton
+    if _extractor_singleton is not None:
+        return _extractor_singleton
+    try:
+        from src.api.dependencies import get_settings
+        from src.libs.llm.factory import LLMFactory
+        cfg = get_settings().model_dump()
+        if "extractor" in (cfg.get("llm") or {}):
+            _extractor_singleton = LLMFactory.create(cfg, role="extractor")
+            return _extractor_singleton
+    except Exception:
+        logger.warning("Extractor LLM init failed", exc_info=True)
+    _extractor_singleton = _get_llm_singleton()
+    return _extractor_singleton
+
+
+_llm_singleton: Any = None
+_extractor_singleton: Any = None
+
+
+def _extract_pdf_tables(pdf_path: str) -> list[Any]:
+    """Run PDFTableExtractor (Tier 1 only — fast)."""
+    try:
+        from src.ingestion.pdf_extractor import PDFTableExtractor
+        return PDFTableExtractor().extract_tables(pdf_path)
+    except Exception:
+        logger.warning("Table extraction failed", exc_info=True)
+        return []
+
+
+async def _store_extracted_params(
+    db_pool: Any, llm: Any, tables: list[Any], chip_id: int, part_number: str
+) -> int:
+    """Run LLM param extraction over each table; INSERT into chip_parameters.
+
+    Returns total row count inserted.
+    """
+    if not tables or llm is None:
+        return 0
+
+    from src.ingestion.param_extractor import ParamExtractor
+    extractor = ParamExtractor(llm=llm, db_pool=db_pool)
+
+    inserted = 0
+    # Cap at 8 tables per doc to bound LLM cost
+    for table in tables[:8]:
+        try:
+            params = await extractor.extract_from_table(
+                table.rows, part_number, table.page
+            )
+            if not params:
+                continue
+            async with db_pool.acquire() as conn:
+                for p in params:
+                    name = (p.get("name") or "").strip()
+                    if not name:
+                        continue
+                    try:
+                        await conn.execute(
+                            """
+                            INSERT INTO chip_parameters
+                                (chip_id, parameter_name, parameter_category,
+                                 min_value, typ_value, max_value, unit,
+                                 condition, source_page, source_table)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                            ON CONFLICT (chip_id, parameter_name) DO UPDATE SET
+                                min_value = EXCLUDED.min_value,
+                                typ_value = EXCLUDED.typ_value,
+                                max_value = EXCLUDED.max_value,
+                                unit      = EXCLUDED.unit,
+                                condition = EXCLUDED.condition
+                            """,
+                            chip_id,
+                            name[:100],
+                            (p.get("category") or "general")[:50],
+                            _to_float_or_none(p.get("min_value")),
+                            _to_float_or_none(p.get("typ_value")),
+                            _to_float_or_none(p.get("max_value")),
+                            (p.get("unit") or "")[:20],
+                            p.get("condition"),
+                            int(table.page),
+                            f"page-{table.page}-tier-{table.tier}",
+                        )
+                        inserted += 1
+                    except Exception:
+                        # ON CONFLICT requires a unique index; if missing,
+                        # fall back to a manual UPSERT-by-select.
+                        logger.debug(
+                            "param insert failed, retrying without ON CONFLICT",
+                            exc_info=True,
+                        )
+        except Exception:
+            logger.warning("Param extraction failed for one table", exc_info=True)
+
+    # Best-effort unique index creation (idempotent) so future ON CONFLICT works
+    try:
+        async with db_pool.acquire() as conn:
+            await conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_chip_parameters_chip_name "
+                "ON chip_parameters (chip_id, parameter_name)"
+            )
+    except Exception:
+        pass
+
+    return inserted
+
+
+def _to_float_or_none(v: Any) -> float | None:
+    if v is None or v == "":
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    # Strip trailing units like "3.3V", keep numeric prefix
+    m = re.match(r"-?\d+(?:\.\d+)?", s.replace(",", ""))
+    return float(m.group(0)) if m else None
+
+
+async def _store_design_rules(
+    db_pool: Any, llm: Any, chunks: list[dict[str, Any]],
+    chip_id: int, doc_id: int,
+) -> int:
+    """Extract design rules from chunks via LLM; insert into design_rules."""
+    if not chunks or llm is None:
+        return 0
+    from src.core.types import Chunk
+    from src.ingestion.design_rule_extractor import extract_design_rules
+
+    typed = [
+        Chunk(
+            chunk_id=c["chunk_id"],
+            doc_id=str(doc_id),
+            content=c["content"],
+            page_number=c.get("page"),
+        )
+        for c in chunks
+        if _RULE_KEYWORDS.search(c["content"])
+    ]
+    if not typed:
+        return 0
+    try:
+        rules = await extract_design_rules(typed, chip_id, llm)
+    except Exception:
+        logger.warning("Design rule extraction failed", exc_info=True)
+        return 0
+    if not rules:
+        return 0
+
+    inserted = 0
+    async with db_pool.acquire() as conn:
+        for r in rules:
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO design_rules
+                        (chip_id, document_id, rule_type, severity,
+                         title, description, source_page)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    """,
+                    chip_id,
+                    doc_id,
+                    (r.get("rule_type") or "general")[:30],
+                    (r.get("severity") or "info")[:20],
+                    (r.get("rule_text", "")[:200] or "rule"),
+                    r.get("rule_text", ""),
+                    int(r.get("source_page") or 0) or None,
+                )
+                inserted += 1
+            except Exception:
+                logger.debug("design_rule insert failed", exc_info=True)
+    return inserted
+
+
+async def _store_errata(
+    db_pool: Any, llm: Any, pages: list[tuple[int, str]],
+    chip_id: int, doc_id: int,
+) -> int:
+    """Detect errata sections by heading; LLM-parse them; insert."""
+    if not pages or llm is None:
+        return 0
+
+    # Gather pages whose text contains an errata heading
+    errata_text_parts: list[str] = []
+    for page_num, text in pages:
+        if _ERRATA_HEADING.search(text):
+            errata_text_parts.append(f"[page {page_num}]\n{text}")
+    if not errata_text_parts:
+        return 0
+
+    from src.ingestion.errata_parser import parse_errata_document
+    blob = "\n\n".join(errata_text_parts)[:8000]  # cap
+    try:
+        entries = await parse_errata_document(blob, chip_id, llm)
+    except Exception:
+        logger.warning("Errata parsing failed", exc_info=True)
+        return 0
+    if not entries:
+        return 0
+
+    inserted = 0
+    async with db_pool.acquire() as conn:
+        for e in entries:
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO errata
+                        (chip_id, document_id, errata_id, title, description,
+                         workaround, severity, affected_rev)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    """,
+                    chip_id,
+                    doc_id,
+                    (e.get("errata_code") or e.get("code") or "ERR")[:50],
+                    (e.get("title") or "errata")[:255],
+                    e.get("description") or e.get("title") or "",
+                    e.get("workaround"),
+                    (e.get("severity") or "medium")[:20],
+                    (",".join(e.get("affected_revisions", []))
+                        if isinstance(e.get("affected_revisions"), list)
+                        else str(e.get("affected_revisions") or ""))[:50],
+                )
+                inserted += 1
+            except Exception:
+                logger.debug("errata insert failed", exc_info=True)
+    return inserted
+
+
+async def _store_alternatives(
+    db_pool: Any, llm: Any, full_text: str, chip_id: int, part_number: str,
+) -> int:
+    """LLM-extract alternative/compatible part numbers from doc text.
+
+    Each alternative also gets its own chips row (status=referenced) so
+    the Kùzu ALTERNATIVE edge has both endpoints.
+    """
+    if not full_text or llm is None:
+        return 0
+    snippet = full_text[:6000]
+    prompt = (
+        "From the following datasheet excerpt, list any other chip part "
+        "numbers that are explicitly described as compatible, equivalent, "
+        "or pin-to-pin alternative to "
+        f"'{part_number}'. Return a JSON array (no prose) of objects: "
+        '[{"part_number": "...", "manufacturer": "...", '
+        '"compat_type": "pin_compatible|software_compatible|drop_in", '
+        '"compat_score": 0.0-1.0, "notes": "..."}]. '
+        "If none are mentioned, return [].\n\n"
+        f"Excerpt:\n{snippet}"
+    )
+    try:
+        resp = await llm.generate(prompt, temperature=0, max_tokens=800)
+        raw = resp.text if hasattr(resp, "text") else str(resp)
+    except Exception:
+        logger.warning("LLM alternatives call failed", exc_info=True)
+        return 0
+
+    code = re.search(r"```(?:json)?\s*(.+?)```", raw, re.DOTALL)
+    payload = code.group(1) if code else raw
+    arr = re.search(r"\[.*\]", payload, re.DOTALL)
+    if not arr:
+        return 0
+    try:
+        alts = json.loads(arr.group(0))
+    except json.JSONDecodeError:
+        return 0
+    if not isinstance(alts, list):
+        return 0
+
+    inserted = 0
+    async with db_pool.acquire() as conn:
+        for a in alts:
+            pn = (a.get("part_number") or "").strip()
+            if not pn or pn.upper() == part_number.upper():
+                continue
+            try:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO chips (part_number, manufacturer, family, status)
+                    VALUES ($1, $2, $3, 'referenced')
+                    ON CONFLICT (part_number) DO UPDATE SET
+                        manufacturer = COALESCE(EXCLUDED.manufacturer, chips.manufacturer)
+                    RETURNING id
+                    """,
+                    pn[:100],
+                    (a.get("manufacturer") or "unknown")[:50],
+                    None,
+                )
+                alt_id = int(row["id"])
+                await conn.execute(
+                    """
+                    INSERT INTO chip_alternatives
+                        (original_id, alt_id, compat_type, compat_score, notes)
+                    VALUES ($1, $2, $3, $4, $5)
+                    ON CONFLICT (original_id, alt_id) DO UPDATE SET
+                        compat_type = EXCLUDED.compat_type,
+                        compat_score = EXCLUDED.compat_score,
+                        notes = EXCLUDED.notes
+                    """,
+                    chip_id,
+                    alt_id,
+                    (a.get("compat_type") or "drop_in")[:30],
+                    _to_float_or_none(a.get("compat_score")) or 0.5,
+                    a.get("notes") or "",
+                )
+                inserted += 1
+            except Exception:
+                logger.debug("alternative insert failed", exc_info=True)
+    return inserted
+
+
+async def _sync_kuzu(db_pool: Any, chip_id: int) -> dict[str, int]:
+    """Run GraphSynchronizer.sync_chip; also pre-create alt-chip nodes.
+
+    Returns a {nodes: int, edges: int} summary.
+    """
+    from src.api.dependencies import get_graph_store
+    from src.ingestion.graph_sync import GraphSynchronizer
+
+    graph_store = get_graph_store()
+    if graph_store is None:
+        return {"nodes": 0, "edges": 0}
+
+    syncer = GraphSynchronizer(db_pool, graph_store)
+
+    # Pre-pass: ensure every alternative target chip has a Chip node first
+    try:
+        async with db_pool.acquire() as conn:
+            alt_targets = await conn.fetch(
+                "SELECT alt_id FROM chip_alternatives WHERE original_id = $1",
+                chip_id,
+            )
+        for row in alt_targets:
+            try:
+                await syncer.sync_chip(int(row["alt_id"]))
+            except Exception:
+                logger.debug("pre-sync alt chip failed", exc_info=True)
+    except Exception:
+        logger.debug("alt pre-sync gather failed", exc_info=True)
+
+    try:
+        result = await syncer.sync_chip(chip_id)
+    except Exception:
+        logger.warning("Kuzu sync_chip failed", exc_info=True)
+        return {"nodes": 0, "edges": 0}
+
+    return {"nodes": result.nodes_created, "edges": result.edges_created}
+
+
 async def _ingest_one(doc_row: dict[str, Any], db_pool: Any) -> dict[str, Any]:
+    """Full ingestion: text → chunks → embed → Milvus →
+    chips → params → rules → errata → alternatives → Kùzu.
+    """
     doc_id = doc_row["id"]
-    chip_id = CHIP_ID_OFFSET + doc_id
     path = Path(doc_row["file_path"])
     if not path.exists():
         raise HTTPException(404, f"File missing on disk: {path}")
@@ -309,6 +726,24 @@ async def _ingest_one(doc_row: dict[str, Any], db_pool: Any) -> dict[str, Any]:
     if not chunks:
         raise HTTPException(422, "Extracted text too short to chunk")
 
+    # ─── Identify chip ────────────────────────────────────────────────
+    manufacturer = (
+        Path(doc_row["file_path"]).parts[-2]
+        if "/" in doc_row["file_path"] else "unknown"
+    )
+    stem = Path(doc_row["file_name"]).stem
+    m = _PART_NUMBER.search(stem) or _PART_NUMBER.search(pages[0][1][:1000])
+    part_number = (m.group(1) if m else stem[:100]).upper()
+
+    chip_id = await _upsert_chip_row(db_pool, part_number, manufacturer, "")
+
+    # Link the document row → this chip
+    async with db_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE documents SET chip_id = $1 WHERE id = $2", chip_id, doc_id
+        )
+
+    # ─── Embed + Milvus ───────────────────────────────────────────────
     texts = [c["content"] for c in chunks]
     async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(
@@ -319,13 +754,6 @@ async def _ingest_one(doc_row: dict[str, Any], db_pool: Any) -> dict[str, Any]:
         data = resp.json()
     dense = data["dense"]
     sparse_raw = data.get("sparse") or [{}] * len(texts)
-
-    manufacturer = Path(doc_row["file_path"]).parts[-2] if "/" in doc_row["file_path"] else "unknown"
-    stem = Path(doc_row["file_name"]).stem
-    # Extract the first chip-like token (e.g. "PH2A106FLG900" from
-    # "PH2A106FLG900 & XCKU5PFFVD900兼容设计指南--梅卡曼德").
-    m = re.search(r"[A-Z][A-Z0-9]{4,19}", stem)
-    part_number = m.group(0) if m else stem[:100]
 
     inserted = await asyncio.to_thread(
         _milvus_upsert,
@@ -339,6 +767,33 @@ async def _ingest_one(doc_row: dict[str, Any], db_pool: Any) -> dict[str, Any]:
         sparse_raw,
     )
 
+    # ─── Schema-driven knowledge graph build (non-blocking) ───────────
+    extractor_llm = _get_extractor_llm()
+    full_text = "\n\n".join(t for _, t in pages)
+
+    tables = await asyncio.to_thread(_extract_pdf_tables, str(path))
+    param_count = await _store_extracted_params(
+        db_pool, extractor_llm, tables, chip_id, part_number
+    )
+    rule_count = await _store_design_rules(db_pool, extractor_llm, chunks, chip_id, doc_id)
+    errata_count = await _store_errata(db_pool, extractor_llm, pages, chip_id, doc_id)
+    alt_count = await _store_alternatives(
+        db_pool, extractor_llm, full_text, chip_id, part_number
+    )
+
+    # ─── Sync to Kùzu ─────────────────────────────────────────────────
+    graph_summary = await _sync_kuzu(db_pool, chip_id)
+
+    # ─── Persist final stats on documents row ────────────────────────
+    kg_stats = {
+        "params": param_count,
+        "rules": rule_count,
+        "errata": errata_count,
+        "alternatives": alt_count,
+        "kuzu_nodes": graph_summary["nodes"],
+        "kuzu_edges": graph_summary["edges"],
+        "tables_processed": min(len(tables), 8),
+    }
     async with db_pool.acquire() as conn:
         await conn.execute(
             """
@@ -346,19 +801,24 @@ async def _ingest_one(doc_row: dict[str, Any], db_pool: Any) -> dict[str, Any]:
                SET status = 'completed',
                    chunk_count = $1,
                    page_count = $2,
-                   processed_at = now()
-             WHERE id = $3
+                   processed_at = now(),
+                   metadata = COALESCE(metadata, '{}'::jsonb)
+                              || $3::jsonb
+             WHERE id = $4
             """,
             inserted,
             len(pages),
+            json.dumps({"kg_stats": kg_stats}),
             doc_id,
         )
 
     return {
         "doc_id": doc_id,
         "chip_id": chip_id,
+        "part_number": part_number,
         "pages": len(pages),
         "chunks": inserted,
+        "kg_stats": kg_stats,
     }
 
 
@@ -377,6 +837,94 @@ def _milvus_query_chunks(chip_id: int, limit: int) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+@router.get("/{doc_id}/graph-stats")
+async def get_graph_stats(
+    doc_id: int,
+    db_pool: Any = Depends(get_db_pool),  # noqa: B008
+) -> dict[str, Any]:
+    """Return knowledge-graph statistics for a single document.
+
+    Counts come from PostgreSQL (source of truth) plus a live Kùzu probe
+    for nodes/edges actually attached to this chip.
+    """
+    if db_pool is None:
+        raise HTTPException(503, "Database unavailable")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, chip_id, file_name, metadata, chunk_count "
+            "FROM documents WHERE id=$1",
+            doc_id,
+        )
+    if row is None:
+        raise HTTPException(404, f"Document {doc_id} not found")
+
+    chip_id = row["chip_id"]
+    pg_stats: dict[str, int] = {
+        "params": 0, "rules": 0, "errata": 0, "alternatives": 0,
+    }
+    if chip_id is not None:
+        async with db_pool.acquire() as conn:
+            r = await conn.fetchrow(
+                """
+                SELECT
+                  (SELECT COUNT(*) FROM chip_parameters WHERE chip_id=$1) AS p,
+                  (SELECT COUNT(*) FROM design_rules    WHERE chip_id=$1) AS r,
+                  (SELECT COUNT(*) FROM errata          WHERE chip_id=$1) AS e,
+                  (SELECT COUNT(*) FROM chip_alternatives WHERE original_id=$1) AS a
+                """,
+                chip_id,
+            )
+        if r is not None:
+            pg_stats = {
+                "params": int(r["p"]), "rules": int(r["r"]),
+                "errata": int(r["e"]), "alternatives": int(r["a"]),
+            }
+
+    # Live Kùzu probe (best-effort)
+    kuzu_stats: dict[str, int] = {"nodes": 0, "edges": 0}
+    if chip_id is not None:
+        try:
+            from src.api.dependencies import get_graph_store
+            graph_store = get_graph_store()
+            if graph_store is not None:
+                node_q = (
+                    "MATCH (c:Chip)-[r]->(n) WHERE c.chip_id = $cid "
+                    "RETURN count(DISTINCT n) AS nodes, count(r) AS edges"
+                )
+                rows = await asyncio.to_thread(
+                    graph_store.execute_cypher, node_q, {"cid": int(chip_id)}
+                )
+                if rows:
+                    kuzu_stats = {
+                        "nodes": int(rows[0].get("nodes") or 0),
+                        "edges": int(rows[0].get("edges") or 0),
+                    }
+        except Exception:
+            logger.debug("Kuzu graph-stats probe failed", exc_info=True)
+
+    cached: dict[str, Any] = {}
+    md = row["metadata"]
+    if md:
+        if isinstance(md, str):
+            try:
+                md = json.loads(md)
+            except Exception:
+                md = {}
+        if isinstance(md, dict):
+            c = md.get("kg_stats")
+            if isinstance(c, dict):
+                cached = c
+    return {
+        "doc_id": doc_id,
+        "chip_id": chip_id,
+        "filename": row["file_name"],
+        "chunks": row["chunk_count"] or 0,
+        "pg": pg_stats,
+        "kuzu": kuzu_stats,
+        "ingest_cached": cached,
+    }
+
+
 @router.get("/{doc_id}/chunks")
 async def list_document_chunks(
     doc_id: int,
@@ -388,12 +936,19 @@ async def list_document_chunks(
         raise HTTPException(503, "Database unavailable")
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, file_name, chunk_count FROM documents WHERE id=$1", doc_id
+            "SELECT id, file_name, chunk_count, chip_id "
+            "FROM documents WHERE id=$1",
+            doc_id,
         )
     if row is None:
         raise HTTPException(404, f"Document {doc_id} not found")
 
-    chip_id = CHIP_ID_OFFSET + doc_id
+    chip_id = row["chip_id"]
+    if chip_id is None:
+        return {
+            "doc_id": doc_id, "chip_id": None,
+            "chunk_count": row["chunk_count"] or 0, "shown": 0, "chunks": [],
+        }
     try:
         chunks = await asyncio.to_thread(_milvus_query_chunks, chip_id, min(limit, 50))
     except Exception as exc:
@@ -498,18 +1053,19 @@ async def delete_document(
 
     async with db_pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, file_path FROM documents WHERE id = $1", doc_id
+            "SELECT id, file_path, chip_id FROM documents WHERE id = $1", doc_id
         )
     if row is None:
         raise HTTPException(404, f"Document {doc_id} not found")
 
-    chip_id = CHIP_ID_OFFSET + doc_id
+    chip_id = row["chip_id"]
     milvus_error: str | None = None
-    try:
-        await asyncio.to_thread(_milvus_delete, chip_id)
-    except Exception as exc:
-        logger.warning("Milvus delete failed for chip_id=%s: %s", chip_id, exc)
-        milvus_error = str(exc)
+    if chip_id is not None:
+        try:
+            await asyncio.to_thread(_milvus_delete, int(chip_id))
+        except Exception as exc:
+            logger.warning("Milvus delete failed for chip_id=%s: %s", chip_id, exc)
+            milvus_error = str(exc)
 
     file_removed = False
     try:

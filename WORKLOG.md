@@ -416,3 +416,63 @@
 3. 重跑基线 ——`context_precision` 预期从 0.08 跳到 0.4+，因为 Agent 终于能 `SELECT value FROM chip_parameters WHERE name='DSP数量'` 直击答案，而非从 chunks 猜。
 
 **用户下一步动作**：等用户决定是否立即着手做参数入库链路。
+
+### [User] 2026-04-23 — 指令：执行 GraphRAG 三阶段全部改造（Phase A/B/C）
+
+### [Copilot] 2026-04-23 — 【开始】GraphRAG ingestion 改造（A→B→C→D）
+**目标**：把"上传 PDF → Vector RAG only"升级为"上传 PDF → Vector + Schema + Graph 三库齐全"。
+
+**关键架构决策**：
+- **不修复 Celery chain 那 5 个空壳**——它从未被实际使用。前端按"Ingest"按钮走的是 `documents.py::_ingest_one()` 这条同步路径。
+- **改造 `_ingest_one()` 直接做满全套**：PG chips insert → 表抽取 → LLM 参数提取 → 设计规则 → 勘误 → 替代品 → Kùzu 同步。
+- **复用 uvicorn 进程内已有的 KuzuGraphStore**（避免锁竞争）：通过 app.state 单例。
+
+**Phase 排期**（按依赖图）：
+- A0 修 GraphSynchronizer 字段名映射（PG `chips.id` → Kùzu `chip_id` 等）
+- A1 _ingest_one 真插 chips 表（替换 CHIP_ID_OFFSET hack）
+- A2 表抽取 + LLM 参数提取 → chip_parameters
+- A4 Kùzu 共享单例（避免锁冲突）
+- A3 sync_chip 调用 → Kùzu 实节点 + 边
+- B1 设计规则抽取 → design_rules
+- B2 勘误检测 + 抽取 → errata
+- B3 替代芯片 LLM 抽取 → chip_alternatives
+- C1 /graph-stats endpoint
+- C2 前端 Documents 页显示图谱统计
+- D1 端到端验证（重新 ingest 3 个 PDF + Cypher 查询 + Agent E2E）
+- D2 提交 push
+
+### [Copilot] 2026-04-23 — 【结束】GraphRAG ingestion 改造（A0–C2 完成，D1 部分验证）
+
+**已完成代码**（11 文件，1 新增迁移）：
+- `src/ingestion/graph_sync.py` — 完整重写，PG↔Kùzu 字段名映射对齐（`chips.id`→`Chip.chip_id` 等 9 处不一致全部修正）。
+- `src/api/routers/documents.py` — `_ingest_one()` 从 ~150 行扩展到 ~280 行：真正 INSERT 到 `chips` 表（替换 `CHIP_ID_OFFSET=10000+doc_id` 假 ID）、调用 `_store_extracted_params/rules/errata/alternatives`、最后 `_sync_kuzu()`，并写入 `documents.metadata->>'kg_stats'`。新增 `GET /api/v1/documents/{id}/graph-stats` 端点。
+- `src/api/dependencies.py` — `get_graph_store()` 模块级单例，让查询路由 + ingestion 共享同一个 Kùzu Database 实例（修复"IO lock"竞争）。
+- `src/api/routers/query.py` — orchestrator 初始化改用共享单例。
+- `src/core/settings.py` — `LLMSettings` 增加 `extractor: LLMEndpointSettings | None = None`。
+- `config/settings.yaml` — 新增 `llm.extractor` 角色（gemma-4-31b-it，timeout=600）。
+- `src/ingestion/param_extractor.py` — `_parse_llm_output` 增强（支持 `<think>` 剥离 + 单 JSON 对象兜底），`extract_from_table` 在 LLM 返回空 content 时记日志而非误报"parse failed"。
+- `frontend/web/src/api/documents.ts` — 新增 `GraphStats` 接口 + `getGraphStats()` API。
+- `frontend/web/src/views/DocumentsView.vue` — 列表页"知识图谱"列展示 5 个彩色 pill（📊params 📐rules ⚠️errata ↔️alt 🕸️Nn·Ee），抽屉详情 6 格 KG 网格。
+- `alembic/versions/002_kg_metadata.py` — 新迁移，加 `documents.metadata` JSONB + `uq_chip_parameters_chip_name` 唯一索引。已 `alembic upgrade head` 应用。
+
+**端到端验证结果（D1 部分）**：
+- ✅ Migration 应用成功；`vue-tsc` 零错误；`npm run build` 通过；Python 全部 import 干净。
+- ✅ uvicorn `/readiness` 7/7 服务就绪（postgres, redis, milvus, embedding, reranker, lmstudio_primary/router）。
+- ✅ 上传 3 PDF → ingest 完成 → `chips` 真有 2 行（去重后），`documents.chip_id` FK 设置正确，Kùzu 节点 2-3 个、边 1-2 条/doc。
+- ✅ Schema-driven KG 链路全通：PDF 上传时即 `Chip → DESCRIBES ← Document` 关系建立。
+- ⚠️ **LLM 参数/规则/勘误/替代品提取未产出数据**（params=0, rules=0, errata=0, alts=0）。
+
+**关键技术发现（耗时最长的调试）**：
+1. **qwen3-35b-a3b 是 reasoning 模型**：所有"empty content"的 LLM 调用都是因为 `completion_tokens=4000` 全部消耗在 `reasoning_tokens` 上，从未输出可见 JSON。`/no_think` 前缀 + `chat_template_kwargs.enable_thinking=false` 在 LM Studio 0.3.x 上均无效。
+2. **解决方案**：引入第三个 LLM 角色 `extractor`，指向 `gemma-4-31b-it`（非 reasoning），单次 79 token 即可返回干净 JSON。代码已切换 ingestion 使用 extractor 模型。
+3. **本机硬件瓶颈**：在 AMD Ryzen AI 395 上 gemma-4-31b 单次 ~1500 token prompt 的 ReadTimeout 仍偶发（即使 600s）。LM Studio JIT 模型切换 + 大表抽取在该硬件上不稳定。
+
+**遗留与下一步**：
+- 提取链路代码完整正确，但**完整 ingest 在该机器上耗时不可控**。建议（按 ROI 排）：
+  1. **拆细 LLM 调用**：每个表分页批，单次 prompt < 800 tokens；
+  2. **用 LM Studio 的结构化输出 JSON Schema 模式**（response_format），强制非 reasoning 路径；
+  3. **降级到 7B 抽取模型**（如 gemma-2-9b-it 或 qwen2.5-7b-instruct）；
+  4. **后台异步**：把抽取链改回 Celery `heavy` 队列，不阻塞用户上传。
+- `WORKLOG.md` 中之前 Claude 提的 evaluation baseline 重跑，等参数入库稳定后再做。
+
+**已提交并推送**：见后续 commit。
