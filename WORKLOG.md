@@ -140,3 +140,199 @@
 
 **下一步建议**：
 - 如需让 WORKLOG.md 上 GitHub，把它 git add + commit + push。当前它还是 untracked。
+
+---
+
+### [Claude] 2026-04-23 — 【开始】P0 扩充黄金测试集 15 → 150+
+**背景**：上一轮我给出 4 级质量短板清单，用户选择从 P0 动手。目标是把 `data/golden_qa.jsonl` 扩到 150 条以上，按"芯片家族 × 问题类型"分层，用于周度回归对齐 v5.7 基线。
+
+**目标**：
+- 扩展后每个 `(chip_family, question_type)` cell 至少 3 条，整体 ≥150 条。
+- 保留现有 15 条，不改写。
+- 新条目必须对应**系统真实存在**的芯片（否则 grounding 闸门会直接拒答，测不出 RAG 能力）。
+
+**行动计划**（task #39–#43）：
+1. 盘点真实数据：PG `chip_params` / Milvus `datasheet_chunks` / Kuzu Chip 节点有多少、覆盖哪些芯片。
+2. 读 `src/evaluation/golden.py` 锁定 schema 与现有 15 条的风格。
+3. 设计分层矩阵：问题类型（单参数 / 对比 / 选型 / 时序 / 错误处理）× 芯片家族。
+4. 生成 JSONL 追加到 `data/golden_qa.jsonl`。
+5. 跑 `python -m src.evaluation.cli run --golden --limit 3` 做烟测。
+
+**当前上下文快照**：
+- 现有 15 条全部围绕 `PH2A106FLG900` / `XCKU5PFFVD900` 两颗芯片 + PCIe 类问题（见 `data/golden_qa.jsonl`）。覆盖面过窄——只能测 PCIe bandwidth / clock 范围这一类。
+- 需要新问题类型覆盖：单参数查询 / 芯片对比 / 选型推荐 / 时序 & 封装 / 错误处理 & errata。
+
+**⚠️ 盘点结果 (task #39 完成)——暴露系统性数据缺失**：
+
+| 存储层 | 状态 | 数据量 |
+|-------|------|--------|
+| PostgreSQL `chips` / `chip_parameters` / `documents` / `errata` / `design_rules` / `chip_alternatives` | **全部空** | 0 rows |
+| PostgreSQL `users` | 1 | (仅 kinglyrex) |
+| Milvus `datasheet_chunks` | 119 条（PH2A 98 / DS1101 10 / STM 11） | |
+| Milvus `knowledge_notes` | 0 | |
+| Kuzu graph | uvicorn 持独占锁，但 PG 空 ⇒ 图必空 | |
+
+**结论**：`sql_query` / `chip_compare` / `graph_query` 三个 Tool 在生产上跑的是空库；当前系统答题能力 ≈ 纯 RAG 从《PH2A106FLG900 兼容指南》98 条 chunks 里 retrieve。
+
+**决策**：用户选择按"最佳路线"继续 → 我执行路线 C：围绕 PH2A106FLG900 1 颗芯片扩 40 条 golden 立起基线，数据入库留新 task #45 追踪。
+
+---
+
+### [Claude] 2026-04-23 — 【结束】P0 黄金集扩充 (15 → 55) + smoke 揭露 3 个新 bug
+**结论**：P0 路线 C（我推荐的务实方案）全部完成。选 C 而非 B/A，因为数据入库那条路要半天—一天，用户要"按最佳路线"先把能立起的基线立起来。
+
+**交付**：
+- `scripts/expand_golden_p0.py`（新文件）——可重入执行，按 id 去重，40 条基于 PH2A106FLG900 兼容指南 98 chunks 精确 grounded 的 QA。
+- `data/golden_qa.jsonl`：15 → **55 条**（append，未改动原 15）。
+- 分层：A 单参数数值 14 / B 对比 10 / C Y-N 特性 6 / D 设计规则 6 / E 应拒答 4。
+- 覆盖 **20+ 参数族**：PCIe / DSP / PLB / ERAM / ERAM_144K / PLL / HXT / 100G MAC / CONFIG / SEU / DDR / 主频 / 电源 / IO 电平 / IO 驱动 / IO 速率 / 热插拔 / IO BANK / 封装 / 热阻。
+- 新 task #45：追踪"数据入库"作为后续——现实是 PG/Kuzu 全空，所以本轮只围绕 1 份文档扩展。
+- 新增 MEMORY：`feedback_worklog_protocol.md`（协作协议持久化）。
+
+**Smoke 测试结果**（task #43，直接跑 orchestrator 而非 HTTP，因无 admin 口令）：
+| 测试 ID | 类别 | 状态 | 问题 |
+|---------|------|------|------|
+| `g_p0_dsp_count` | single_param | 跑通但**答错** | GT: DSP=1,800 / 实际答: DSP=715（把 DSP 主频 MHz 当成了数量） |
+| `g_p0_cmp_hxt_quad` | compare | 跑通但**空答案** | 2 轮 iter 后 answer=""，citations=0 |
+| `g_p0_abstain_price` | abstain | 跑通但**空答案** | 期望结构化拒答，实际 answer=""（拒答模板未注入） |
+
+**Schema / Pipeline 验证**：
+- `list_golden()` 解析 55 条全绿，0 schema 违规；新 40 条全部含 8 个必需字段。
+- 真实 orchestrator.run() 能消费新 golden，只是**答案质量差**。说明：
+  - 扩 golden 成功立起"单芯片深度"回归基线。
+  - 原来 15 条 PCIe-only 设计 ≈ 永远不会碰到主频/Quad 数量/拒答这些 corner。
+
+**Smoke 暴露的 3 个真实缺陷（比 golden 扩充本身更有价值）**：
+1. **RAG 检索 + 重排把"DSP 主频 715 MHz"召到 top 位，LLM 误读为"DSP 数量 715"** —— 表明 rag chunks 对数字 vs 单位的关联理解缺位。**P0.5**：同 chunk 内多字段（name / number / unit）在召回时需整体呈现，不能只返回数字片段。
+2. **HXT Quad 对比返回空串** —— 可能 grounding retrieval gate 把低分召回替换成空，而不是拒答模板。需要 debug `_apply_grounding()` 是否在某条路径上写回 `""` 而非 abstain 字符串。
+3. **拒答类问题直接空答** —— 同样指向 grounding 注入失败。需要看 `annotate_answer()` 的 `abstain_replaces_answer` 路径有没有真正挂进 query router 的响应链。
+
+**Kuzu lock 噪声**：uvicorn 持有 `data/kuzu` 独占锁，导致独立 Python 进程启动 orchestrator 时 `GraphQueryTool` 实例化失败（只影响 graph 工具，rag/sql 仍可用）。生产里只有 uvicorn 一家访问，不是问题；但本地调试脚本要避免并发实例化图库。
+
+**改了哪些文件**：
+- `data/golden_qa.jsonl` (+40 行 append)
+- `scripts/expand_golden_p0.py` (新建, 180 行)
+
+**给下一个接手者的关键提示**：
+1. 55 条 golden 里只有 14 条引用 `XCKU5PFFVD900`（B 对比类）；余下 41 条是单芯片问题。做周度回归时 XCKU 答案也会走 RAG 同一份文档。
+2. 如果要扩到 150+，必须先 **完成 task #45（数据入库）**。现在硬扩只会堆砌拒答。
+3. Smoke 暴露的 3 个 bug 比 golden 本身更值得立刻修——尤其是 bug #3 (拒答空串)，直接把"安全"变成"沉默"。
+4. 运行完整回归：`.venv/bin/python -m src.evaluation.cli run --golden`（55 条串行，约 15-20 分钟，会打到 primary 35B）。先不要跑，等把 3 个 bug 修完再做基线。
+
+---
+
+### [Claude] 2026-04-23 — 【开始】Bug#3/#2 修复：拒答+对比返回空串
+**RAG/Agent 专家判断**：P0 smoke 暴露的 3 个 bug 里，#3（拒答返回空串）和 #2（HXT Quad 对比返回空串）大概率**同根**——都是 `answer == ""` 从回退链路漏出。
+
+**优先级排序理由**：
+- Bug #3 是安全回退断裂：grounding 应该"不确定时说'不确定'"，现在说空字符串——用户看到的是"系统坏了"，比答错更糟。
+- 同根修复 ROI 最高；推迟到后面还得重测。
+- **现在跑基线会污染数据**：Bug 3 会把 4 条 abstain + N 条 compare 的 faithfulness/relevancy 判 0，测完要重测。
+- Bug #1（DSP 主频当数量）是 RAG 深度问题（chunk 格式 + prompt + 重排协同），周期长，留第二攻。
+
+**行动计划**（task #46-#48）：
+1. 读 `src/evaluation/grounding.py`（abstain 分支 + annotate_answer）和 `src/api/routers/query.py::_apply_grounding()`。
+2. 用独立脚本复现：直接输入 `answer=""` / 低分引用，看 grounding 返回什么。
+3. 修复 + 加单测覆盖"agent 返回空串时必须进入 abstain 模板"这条路径。
+4. 重跑 smoke 三条确认。
+
+---
+
+### [Claude] 2026-04-23 — 【结束】Bug#3/#2 复诊：**不是 bug，是我 smoke 的姿势错了**
+**核心结论**：Bug #3 和 #2 **不存在**。我之前的 smoke 直接调 `orchestrator.run()`，**绕过了 `_apply_grounding()`**。把 HTTP 链路复现后，grounding 表现完全正确。
+
+**诊断脚本复现（orchestrator.run() + 手动调 `check_grounding` + `annotate_answer`，模拟 query router 真实路径）**：
+
+| QID | answer 长度 | citations | check_grounding | annotate 后 |
+|-----|------------|-----------|-----------------|-------------|
+| `g_p0_dsp_count` | 397 字（含 "715 DSP" 错答） | 5, top=0.534 | `abstain=True` / 2/4 数值无引用 | ✅ 替换成 108 字拒答模板 |
+| `g_p0_cmp_hxt_quad` | **0 字** | 0 | `abstain=True` / 仅 0 条引用 | ✅ 注入 108 字拒答模板 |
+| `g_p0_abstain_price` | 838 字（LLM 自己拒答，"无法提供单价…"） | 5, top=0.496 | `abstain=False` | ✅ 原样透传（本该如此）|
+
+**判决**：
+- HTTP 路径下，用户**永远不会看到空串**——grounding 检测到 `len(citations) < 2` 或数值对不上就强制抹成拒答模板。
+- 之前表格里的"空答案"是 orchestrator 原始返回，不是用户看到的东西。
+- task #46 / #47 / #48 全部关闭（**no bug; smoke was flawed**）。
+
+**仍然真实的问题（只剩 Bug #1）**：
+- DSP 数量被答成 715（主频 MHz 值）。grounding 能抓住并拒答（用户不会看到错答），但 **abstain 率会被虚高**——影响指标真实度。
+- 根因：chunk 把"DSP 数量 1,800"和"DSP 最高频率 715 MHz"分开了，LLM 在没有锚上下文时抓错。属于 RAG chunk 质量 + prompt 工程问题，不是 grounding 能修的。
+
+**给下一个接手者的关键提示**：
+1. **不要再动 grounding** —— 它是对的。
+2. **Bug #1 是真 bug**，但优先级可以让：grounding 在用户侧是"拒答而非错答"，体验是合格的。
+3. 现在可以放心跑基线：`source .venv/bin/activate && python -m src.evaluation.cli run --golden`（55 条 × ~20s ≈ 15-20 min）。基线数据不会被假 bug 污染。
+4. 跑基线时**务必保证 uvicorn 在跑**（grounding 只在 HTTP 路径生效；CLI runner 用的是 HTTP client 还是直调 orchestrator，需要确认 —— 见下一步）。
+
+---
+
+### [Claude] 2026-04-23 — 【开始】确认 eval runner 路径 + 跑 v5.7 基线
+**RAG 专家判断**：grounding 确认正确后，下一步的最高价值动作是**冻结 v5.7 基线指标**——之后任何改动（chunk 质量、prompt、重排权重）都能跟这条基线对比，否则优化就是盲调。
+
+**动作**：
+1. 读 `src/evaluation/runner.py` / `batch_runner.py`，确认它调的是 HTTP 还是 orchestrator 直连。如果是直连，需要在 runner 里也挂上 `_apply_grounding`，否则 abstain 指标失真。
+2. 跑 `python -m src.evaluation.cli run --golden --judge router`（55 条 × router judge，~15 min）。
+3. 把结果写进 `reports/eval/` + WORKLOG 记录 8 指标数值，作为 v5.7 基线。
+
+### [Copilot] 2026-04-23 — 【结束】v5.7 基线测得 + grounding 已织入 batch_runner（接力 Claude）
+**接力**：Claude 留下 task #49 「确认 eval runner 路径 + 跑 v5.7 基线」处于 **【开始】** 状态。已检查它在工作树里的未提交改动 (`src/evaluation/batch_runner.py` +67/-2，`scripts/expand_golden_p0.py` 新增 +180，`data/golden_qa.jsonl` +40) ——他事实上**已经把 grounding 织进了 batch_runner**（`_build_grounding_config_standalone()` + 对每条样本调 `check_grounding` + `annotate_answer`，并存 `raw_answer` / `grounding` 元数据），只差跑基线。本轮我直接跑完了。
+
+**做了什么**：
+- 烟测 `from src.evaluation.batch_runner import _build_grounding_config_standalone` —— 配置加载正常，min_citations=2 / min_top=0.35 / min_mean=0.25。
+- 运行 `python -m src.evaluation.cli run --golden --judge router`：
+  - 启动 11:05:36 → 完成 11:25:20，耗时 **19 min 44 s**（55 条 × ~21.5s/条）。
+  - 0 失败、0 空答（验证 grounding 至少没把答案抹成空串）。
+  - GraphQueryTool 仍因 uvicorn 锁 Kuzu 而初始化失败（预期内，与 Claude 笔记一致），8 个 tool 正常工作。
+- 落盘：
+  - `reports/eval/v5.7_baseline_run.log`（完整 stdout，约 100 KB）
+  - `reports/eval/v5.7_baseline_2026-04-23.json`（batch 聚合）
+
+**📊 v5.7 基线（55 条 Golden / qwen3-1.7b judge）**：
+
+| 指标 | 值 | n | 说明 |
+|------|-----|----|------|
+| `faithfulness` | **0.594** | 34 | 仅评有引用的样本 |
+| `answer_relevancy` | **0.411** | 55 | 全样本 |
+| `context_precision` | **0.083** | 34 | ⚠️ 极低 — 召回的 chunk 和 GT 重合度差 |
+| `context_recall` | **0.482** | 34 | 仅评有引用的样本 |
+| `citation_coverage` | **0.509** | 55 | 全样本 |
+| **拒答率** | **27/55 = 49.1%** | — | 通过模板文本"暂无法给出可靠答案"统计；`meta.grounding.abstained` 字段全为 False（持久化漏字段，是日志 bug 不是 grounding bug） |
+| **失败率 (`answer_relevancy<0.3`)** | **24/55 = 43.6%** | — | 与拒答率高度重合；扩展后的 golden 集打到了 RAG 真实弱区 |
+
+**和 Claude 上一轮 15 条 baseline 对比**：
+
+| 指标 | 15 条 (旧) | 55 条 (新) | Δ |
+|------|-----------|-----------|----|
+| faithfulness | 0.63 | 0.59 | -0.04 |
+| answer_relevancy | 0.70 | 0.41 | **-0.29** |
+| context_precision | 0.18 | 0.08 | -0.10 |
+| context_recall | 0.52 | 0.48 | -0.04 |
+| citation_coverage | 0.87 | 0.51 | **-0.36** |
+
+**判读**：
+- relevancy / citation_coverage 大跌完全符合预期 —— 旧 15 条都是 PCIe 相关，命中率天然高；新 40 条覆盖 DSP/PLL/HXT/封装/热阻/IO 等"广角"，RAG 召回深度不足直接显形。
+- 拒答率近半 = grounding 闸门工作正常，把"召回不足或数字对不上"的回答替换成中文模板，**把幻觉风险转成了用户可识别的拒答**。
+- context_precision 0.08 是真问题：召回的 chunk 大部分跟 ground truth 不在一个语义平面。
+
+**改了哪些文件 / 资产**：
+- 已 commit (本轮):
+  - `data/golden_qa.jsonl` (+40 条 golden) [Claude 留下的未提交改动，本轮纳入提交]
+  - `src/evaluation/batch_runner.py` (grounding 织入) [Claude 留下]
+  - `scripts/expand_golden_p0.py` (新文件) [Claude 留下]
+  - `reports/eval/v5.7_baseline_2026-04-23.json` (batch 聚合)
+  - `reports/eval/v5.7_baseline_run.log` (完整 stdout)
+  - `WORKLOG.md` (本条目)
+
+**测试 / 验证**：
+- 运行真实 LM Studio 全套 (qwen3-1.7b primary + qwen3-1.7b judge), 真实 Milvus / BGE-M3 / bce-reranker。0 进程崩溃。
+
+**遗留 / 注意**：
+1. **batch_runner 持久化漏字段**：`meta.grounding.abstained` 应该被 evaluator 写进 per-sample 记录但没写，得靠匹配模板文本反推。后续应在 `runner.py::_run_samples` 写持久化时把 sample 的 `grounding` dict 透传到 `meta`。**优先级 P2**（数据没丢，只是统计要绕一下）。
+2. **GraphQueryTool 在 CLI 模式下永远跑不到** —— 因为 uvicorn 持 Kuzu 锁。任何回归 graph 类问题都需要先 stop uvicorn 再跑 CLI；或者把 batch_runner 改成走 HTTP `/api/v1/evaluations/run`。**优先级 P2**（数据空库，graph 工具暂时也没用武之地）。
+3. **真实弱区清单（按 answer_relevancy<0.3 的 24 条）**：DSP 数量、HXT Quad 数量、PLL 输入范围、ERAM_144K 数量、热插拔耐受时长、IO 驱动等级等多参数细分问题。这些就是 P0.5 优化（chunk 质量、prompt 工程、重排权重）的目标清单。
+4. **下一步建议（接手 Agent）**：
+   - 不要立即扩 golden 到 150+，没有数据入库（task #45）就是堆模板拒答。
+   - 真要做的事 = (a) PG/Kuzu 数据入库，(b) 修 chunk 切分让"DSP 数量 1,800 + DSP 主频 715 MHz"在同一段，(c) 在 system prompt 里强化"必须区分参数名/数值/单位"。
+   - 再次跑基线前先存这次结果做 baseline-A，下次结果对比。
+
+**给下一个接手者**：v5.7 基线已冻结（`reports/eval/v5.7_baseline_2026-04-23.json`）。任何 RAG/prompt 优化必须能让上述 5 个指标（特别是 context_precision 0.083）显著上升才算有效。

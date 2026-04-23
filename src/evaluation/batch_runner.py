@@ -22,6 +22,11 @@ from typing import Any
 
 from src.evaluation.aggregator import METRIC_NAMES
 from src.evaluation.golden import list_golden
+from src.evaluation.grounding import (
+    RetrievalGateConfig,
+    annotate_answer,
+    check_grounding,
+)
 from src.evaluation.runner import (
     DEFAULT_BATCH_METRICS,
     DEFAULT_GOLDEN_METRICS,
@@ -230,6 +235,27 @@ async def run_batch_from_traces(
     )
 
 
+def _build_grounding_config_standalone() -> RetrievalGateConfig | None:
+    """Mirror src/api/routers/query.py::_build_grounding_config but without a Request."""
+    try:
+        from src.api.dependencies import get_settings
+
+        dumped = get_settings().model_dump()
+        cfg = dumped.get("grounding") or {}
+        if not cfg.get("enabled", True):
+            return None
+        return RetrievalGateConfig(
+            enabled=True,
+            min_citations=int(cfg.get("min_citations", 2)),
+            min_top_score=float(cfg.get("min_top_score", 0.35)),
+            min_mean_score=float(cfg.get("min_mean_score", 0.25)),
+            max_unsupported_ratio=float(cfg.get("max_unsupported_ratio", 0.40)),
+        )
+    except Exception:  # noqa: BLE001
+        logger.debug("grounding config load failed; batch will use defaults", exc_info=True)
+        return RetrievalGateConfig()
+
+
 async def run_batch_on_golden(
     judge_llm: Any,
     orchestrator: Any,
@@ -237,7 +263,13 @@ async def run_batch_on_golden(
     metrics: tuple[str, ...] = DEFAULT_GOLDEN_METRICS,
     concurrency: int = _DEFAULT_CONCURRENCY,
 ) -> BatchRun:
-    """Replay the golden set through the agent, then score with ground_truth."""
+    """Replay the golden set through the agent, then score with ground_truth.
+
+    Mirrors the HTTP /query path: after ``orchestrator.run()`` we run the same
+    grounding gate + annotate_answer that the API applies, so batch metrics
+    reflect what real users actually see (abstain template instead of empty
+    string, etc.) rather than raw agent output.
+    """
     golden = list_golden()
     batch = BatchRun(
         judge_model=judge_model_name,
@@ -248,6 +280,8 @@ async def run_batch_on_golden(
     append_batch(batch)
 
     from src.observability.trace_context import TraceContext
+
+    grounding_cfg = _build_grounding_config_standalone()
 
     samples: list[dict[str, Any]] = []
     for g in golden:
@@ -269,21 +303,50 @@ async def run_batch_on_golden(
                         contexts.append(r["content"])
                         citations.append({
                             "chunk_id": r.get("chunk_id"),
+                            "content": r.get("content", ""),
                             "source": (r.get("metadata") or {}).get("part_number") or r.get("source"),
                             "page": r.get("page_number"),
                             "score": r.get("score"),
                         })
 
+        raw_answer = result.answer or ""
+        answer = raw_answer
+        grounding_meta: dict[str, Any] = {"enabled": False}
+        if grounding_cfg is not None:
+            try:
+                report = check_grounding(
+                    raw_answer,
+                    citations,
+                    config=grounding_cfg,
+                    stopped_reason=getattr(result, "stopped_reason", None),
+                )
+                answer = annotate_answer(raw_answer, report)
+                grounding_meta = {
+                    "enabled": True,
+                    "abstained": report.abstain,
+                    "reason": report.reason,
+                    "coverage": round(report.coverage, 3),
+                    "total": report.total,
+                    "retrieval_score": round(report.retrieval_score, 3),
+                    "retrieval_mean": round(report.retrieval_mean, 3),
+                    "stopped_reason": getattr(result, "stopped_reason", None),
+                }
+                trace.record_stage("grounding", grounding_meta)
+            except Exception:  # noqa: BLE001
+                logger.warning("grounding check failed in golden batch", exc_info=True)
+
         samples.append({
             "trace_id": trace.trace_id,
             "query": g["question"],
-            "answer": result.answer,
+            "answer": answer,
+            "raw_answer": raw_answer,
             "contexts": contexts,
             "ground_truth": g.get("ground_truth_answer"),
             "citations": citations,
             "duration_ms": (time.time() - trace._start) * 1000,  # noqa: SLF001
             "iterations": getattr(result, "iterations", 0),
             "golden_id": g.get("id"),
+            "grounding": grounding_meta,
         })
 
     return await _run_samples(
