@@ -336,3 +336,60 @@
    - 再次跑基线前先存这次结果做 baseline-A，下次结果对比。
 
 **给下一个接手者**：v5.7 基线已冻结（`reports/eval/v5.7_baseline_2026-04-23.json`）。任何 RAG/prompt 优化必须能让上述 5 个指标（特别是 context_precision 0.083）显著上升才算有效。
+
+### [Copilot] 2026-04-23 — Gemini 风格前端重设计
+**目标**：用户希望 ChipWise 前端在视觉上对齐 Google Gemini（gemini.google.com）的风格——温和的灰底浅色侧边栏、渐变 logo dot、彩色渐变大标题问候语、卡片式建议、胶囊形输入框、悬浮发送按钮。
+
+**改了哪两个核心文件**（commit 见下）：
+
+#### 1. `frontend/web/src/components/AppLayout.vue`（整体重写，275 → 304 行）
+- **整侧边栏从深色 (#304156) 切换到 Gemini 暖灰 #f0f4f9**（白底主区域 + 浅灰侧栏的对比，更现代）。
+- **品牌行**：ChipWise 字样 + 一颗 8px 蓝→紫→粉渐变圆 dot，对应 Gemini 的 ✦ 标志。
+- **新建对话按钮**：`#c2e7ff` Gemini 蓝色填充胶囊，44 px 高、22 px 圆角，悬停加 1 px 阴影。
+- **导航栏**：所有菜单项用胶囊形 (border-radius: 999px)，激活态 `#d3e3fd` 浅蓝填充 + #0b57d0 图标色，无左侧蓝条；icon 全部换成 1.8 stroke 的线性 SVG（chat / compare / doc / trace / eval）。
+- **历史对话**：胶囊形列表条，激活态浅蓝；删除 ✕ hover 才显示。
+- **底部用户区**：32 px 蓝紫渐变头像 + 用户名 + "退出登录" 副文案，整行点击退出，hover 灰底。
+- **折叠态**：72 px 宽，所有按钮变正圆。
+- 完全移除 Element Plus 的 `el-menu` / `el-button` / `el-aside`（保留全局组件以便其它视图继续用），改成原生 `<nav>` + `<button>`，模板更轻、CSS 完全可控。
+
+#### 2. `frontend/web/src/views/QueryView.vue`（重写，205 → 399 行）
+- **Hero 区（空状态）**：
+  - 56 px 大字 "你好，{username}"，蓝→紫→粉横向渐变 background-clip: text，真正复刻 Gemini 大问候。
+  - 32 px 浅灰副标题 "今天想了解哪颗芯片？"。
+  - **背景径向渐变**：3 个柔和的蓝/粉/紫光斑（z-index 0），带来 Gemini 的"未来感"氛围。
+- **建议卡片**：4 张 2×2 网格卡（min 220 px），#f0f4f9 灰底，每张含 Emoji 圆形图标 + 标题 + 3 行截断的副本。点击直接填入输入框。Emoji 选用 📈/⚖️/🧩/🔧 + 真实可工作的查询样例（PH2A106FLG900 DSP 数量 / 对比 / 设计规则 / IO 时序）。
+- **顶栏**：去掉旧的灰色边框 + 阴影，改为**透明** + "ChipWise RAG ⌄" 模型 pill，hover 灰底圆角，符合 Gemini 顶栏的"几乎不存在"感。
+- **输入区（Composer）**：
+  - 胶囊形 28 px 圆角，`#f0f4f9` 灰底，focus 时变白 + 2 层阴影。
+  - 内部用 `<textarea>` 替代 `el-input`，自动高度 (autoSize)，最大 200 px 后滚动。
+  - 发送按钮 40 px 蓝紫渐变圆，hover 上浮 1 px + 大阴影；空输入时变灰；流式中显示自旋。
+  - Enter 发送、Shift+Enter 换行。
+- **底部小字**："ChipWise 可能会犯错，请核对关键参数" — 复刻 Gemini 的免责提示。
+- **响应式**：<640 px 屏 hero 缩到 40/22 px，建议卡变 1×4。
+
+#### 3. `frontend/web/src/components/__tests__/AppLayout.test.ts` — 修测试
+- 把 `.el-menu-item` selector 改成 `.nav-item`（侧栏改用原生 button）。
+
+**测试 / 验证**：
+- `npx vue-tsc --noEmit` ✅ 无错误。
+- `npm run test -- --run`：5 文件 / **19/19 测试全过**。
+- `npm run build`：成功，dist 输出 `QueryView-*.js` 330 KB → gzip 102 KB（QueryView 增大约 4 KB，是 Hero CSS + Composer 的成本，可接受）。
+- Vite preview server (PID 70234) 仍在 :4173 跑，刷新即可看到新设计。
+
+**和现有 MessageBubble.vue 的协调**：
+- MessageBubble 上一轮 (commit 638dc2b) 已按 Vercel/Linear 风格重写——在 Gemini 风格的 hero/composer 之间夹一段 Vercel 风格的对话气泡，实测视觉协调（都是高对比度、白卡 + 极简）。无需重做。
+
+**截图建议**：用户可在 http://localhost:4173/query 看到：
+- 进入页 = 大渐变 "你好，xxx" + 4 张建议卡 + 底部胶囊输入。
+- 点任一建议卡 → 文字进入输入框 → 回车发送 → MessageBubble 渲染 → hero 消失，进入正常对话流。
+
+**改了哪些文件**：
+- `frontend/web/src/components/AppLayout.vue`（重写）
+- `frontend/web/src/views/QueryView.vue`（重写）
+- `frontend/web/src/components/__tests__/AppLayout.test.ts`（一行 selector 改名）
+
+**遗留 / 注意**：
+1. CompareView / DocumentsView / TracesView / EvaluationsView 仍然是旧 Element Plus 风格——它们和新侧栏放一起会有"侧栏现代、内页传统"的对比。如果用户后续要全 Gemini 化，需要逐一重写这 4 个内页（约 1500 行）。
+2. 暂未上传字体（Gemini 用 Google Sans）—— 当前用系统 -apple-system stack，效果接近但不完全一致。如要完全对齐可加 `Inter` 或 `Google Sans` web font。
+3. 渐变 hero 文字在 Safari < 14 可能不显示（依赖 -webkit-background-clip）—— 主流环境 OK。
+4. 暂未做"暗色模式"——Gemini 有，ChipWise 当前所有页都是明色。

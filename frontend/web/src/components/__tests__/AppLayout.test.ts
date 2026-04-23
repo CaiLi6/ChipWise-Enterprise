@@ -31,7 +31,7 @@ describe('AppLayout', () => {
       },
     })
 
-    const menuItems = wrapper.findAll('.el-menu-item')
+    const menuItems = wrapper.findAll('.nav-item')
     // 5 sections: Query, Compare, Documents, Traces, Evaluations
     expect(menuItems.length).toBe(5)
   })
