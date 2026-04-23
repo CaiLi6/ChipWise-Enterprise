@@ -53,6 +53,15 @@ class TestExtract:
         facts = extract_numeric_facts("There are 100 registers defined")
         assert facts == []
 
+    def test_skips_approximate_values(self) -> None:
+        # Approximate values like "≈8 GB/s" or "~125 MHz" or "约 3.3V" are
+        # estimates and should NOT be checked as factual claims.
+        facts = extract_numeric_facts("Bandwidth ≈ 8 GB/s, clock ~125 MHz, rail 约3.3V")
+        # Only one citable fact should remain (none, in this example)
+        assert all(f.value not in (8.0, 125.0, 3.3) for f in facts), (
+            f"approx values leaked: {[f.raw for f in facts]}"
+        )
+
     def test_empty(self) -> None:
         assert extract_numeric_facts("") == []
         assert extract_numeric_facts(None) == []  # type: ignore[arg-type]
@@ -134,14 +143,19 @@ class TestRetrievalGate:
         assert "top-1" in report.reason
 
     def test_abstain_on_too_many_unsupported(self) -> None:
-        answer = "Clock 111 MHz, bus 222 Gbps, rail 333 V, voltage 444 V"
+        answer = (
+            "Clock 111 MHz, bus 222 Gbps, rail 333 V, voltage 444 V, "
+            "current 555 mA, power 666 W"
+        )
         citations = [
             _cite("Some unrelated datasheet paragraph", score=0.8),
             _cite("Another unrelated chunk", score=0.7),
         ]
         report = check_grounding(
             answer, citations,
-            config=RetrievalGateConfig(max_unsupported_ratio=0.3),
+            config=RetrievalGateConfig(
+                max_unsupported_ratio=0.3, min_unsupported_count=3,
+            ),
         )
         assert report.abstain
         assert "无法" in report.reason or "数值" in report.reason

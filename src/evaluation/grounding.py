@@ -77,6 +77,17 @@ _FACT_RE = re.compile(
 # Lane shorthand like x8 / x16 appears without a number-space-unit form.
 _LANE_RE = re.compile(r"(?<![\w.])x(\d+)\b", re.IGNORECASE)
 
+# Approximation prefix — facts preceded by these are estimates, not citable claims.
+# Examples: "≈8 GB/s", "~125 MHz", "约 3.3V", "大约 2 GHz", "approx 4 W"
+_APPROX_RE = re.compile(
+    r"(?:[≈~约∼]|approx(?:imately)?|大约|大概|roughly|about)\s*$",
+    re.IGNORECASE,
+)
+
+# Fragments commonly emerging from LLM Markdown tables / lists that are
+# pseudo-numeric ("~1", "~2") and shouldn't be checked as factual claims.
+_TABLE_FRAGMENT_RE = re.compile(r"^[~≈]\s*\d+(?:\.\d+)?$")
+
 
 # ---------------------------------------------------------------------------
 # Dataclasses
@@ -161,13 +172,23 @@ def extract_numeric_facts(text: str) -> list[NumericFact]:
         number = _parse_number(m.group(1))
         if number is None:
             continue
+        # Skip approximate values: "≈8 GB/s", "~125 MHz", "约 3.3V"
+        prefix = norm[max(0, m.start() - 12):m.start()]
+        if _APPROX_RE.search(prefix):
+            continue
         unit = _ALIAS_TO_CANON.get(m.group(2).lower(), m.group(2).lower())
         raw_slice = text[m.start():m.end()].strip()
+        if _TABLE_FRAGMENT_RE.match(raw_slice):
+            continue
         out.append(NumericFact(value=number, unit=unit, raw=raw_slice))
 
     for m in _LANE_RE.finditer(norm):
         number = _parse_number(m.group(1))
         if number is None:
+            continue
+        # Lane width near approx / table cell separators isn't a hard claim
+        prefix = norm[max(0, m.start() - 12):m.start()]
+        if _APPROX_RE.search(prefix):
             continue
         raw_slice = text[m.start():m.end()].strip()
         out.append(NumericFact(value=number, unit="x", raw=raw_slice))
@@ -228,7 +249,8 @@ class RetrievalGateConfig:
     min_citations: int = 2
     min_top_score: float = 0.35
     min_mean_score: float = 0.25
-    max_unsupported_ratio: float = 0.40  # >40% unverified numbers → abstain
+    max_unsupported_ratio: float = 0.60  # >60% unverified numbers → abstain
+    min_unsupported_count: int = 5       # need at least 5 unverified facts to abstain
     enabled: bool = True
 
 
@@ -329,9 +351,12 @@ def check_grounding(
 
     report.coverage = len(report.supported) / len(facts) if facts else 1.0
 
-    if cfg.enabled and report.total >= 3:
+    if cfg.enabled and report.total >= 5:
         unsupported_ratio = len(report.unsupported) / report.total
-        if unsupported_ratio > cfg.max_unsupported_ratio:
+        if (
+            unsupported_ratio > cfg.max_unsupported_ratio
+            and len(report.unsupported) >= cfg.min_unsupported_count
+        ):
             report.abstain = True
             report.reason = (
                 f"{len(report.unsupported)}/{report.total} 个数值无法在引用中找到依据"

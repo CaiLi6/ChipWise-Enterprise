@@ -709,6 +709,80 @@ async def _sync_kuzu(db_pool: Any, chip_id: int) -> dict[str, int]:
     return {"nodes": result.nodes_created, "edges": result.edges_created}
 
 
+async def _store_co_mentioned_chips(
+    db_pool: Any,
+    full_text: str,
+    *,
+    primary_chip_id: int,
+    primary_part: str,
+    manufacturer: str,
+    doc_id: int,
+) -> int:
+    """Discover other chip part-numbers mentioned in the doc and create
+    Chip rows + a chip_alternatives edge so Vector RAG / Graph RAG can
+    surface chunks for the comparison/alternative chip.
+
+    Threshold: a candidate must appear ≥3 times (whole-token) and look
+    like a chip part-number (uppercase + digit, len 5–25).
+    """
+    if not full_text:
+        return 0
+
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    candidates: list[str] = []
+    for m in _PART_NUMBER.finditer(full_text):
+        pn = m.group(1).upper()
+        if pn == primary_part.upper() or pn in seen:
+            continue
+        # Skip pure numeric / too short tokens that regex might emit
+        if len(pn) < 5 or not any(c.isdigit() for c in pn):
+            continue
+        seen.add(pn)
+        candidates.append(pn)
+
+    # Count whole-word occurrences for ranking
+    from collections import Counter
+    counts = Counter(re.findall(r"\b[A-Z][A-Z0-9\-]{4,24}\b", full_text.upper()))
+    significant = [p for p in candidates if counts.get(p, 0) >= 3]
+    # Cap to avoid runaway noise
+    significant = significant[:5]
+    if not significant:
+        return 0
+
+    created = 0
+    async with db_pool.acquire() as conn:
+        for pn in significant:
+            try:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO chips (part_number, manufacturer, family, status)
+                    VALUES ($1, $2, $3, 'active')
+                    ON CONFLICT (part_number) DO UPDATE
+                       SET updated_at = NOW()
+                    RETURNING id
+                    """,
+                    pn, manufacturer or "unknown", "",
+                )
+                alt_id = int(row["id"])
+                # Co-mention edge (compatible/alternative)
+                await conn.execute(
+                    """
+                    INSERT INTO chip_alternatives
+                        (original_id, alt_id, compat_type, notes)
+                    VALUES ($1, $2, 'comention', $3)
+                    ON CONFLICT (original_id, alt_id) DO NOTHING
+                    """,
+                    primary_chip_id, alt_id,
+                    f"co-mentioned in document #{doc_id}",
+                )
+                created += 1
+            except Exception:
+                logger.debug("co-mention chip insert failed for %s", pn, exc_info=True)
+
+    return created
+
+
 async def _ingest_one(doc_row: dict[str, Any], db_pool: Any) -> dict[str, Any]:
     """Full ingestion: text → chunks → embed → Milvus →
     chips → params → rules → errata → alternatives → Kùzu.
@@ -784,12 +858,21 @@ async def _ingest_one(doc_row: dict[str, Any], db_pool: Any) -> dict[str, Any]:
     # ─── Sync to Kùzu ─────────────────────────────────────────────────
     graph_summary = await _sync_kuzu(db_pool, chip_id)
 
+    # ─── Co-mentioned chips: scan full text, build extra Chip nodes ────
+    # Datasheets like "PH2A106FLG900 vs XCKU5PFFVD900 兼容设计指南" mention
+    # comparison chips that the agent's chip-id filter would otherwise drop.
+    co_mention_count = await _store_co_mentioned_chips(
+        db_pool, full_text, primary_chip_id=chip_id, primary_part=part_number,
+        manufacturer=manufacturer, doc_id=doc_id,
+    )
+
     # ─── Persist final stats on documents row ────────────────────────
     kg_stats = {
         "params": param_count,
         "rules": rule_count,
         "errata": errata_count,
         "alternatives": alt_count,
+        "co_mentioned_chips": co_mention_count,
         "kuzu_nodes": graph_summary["nodes"],
         "kuzu_edges": graph_summary["edges"],
         "tables_processed": min(len(tables), 8),

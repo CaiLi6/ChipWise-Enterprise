@@ -479,3 +479,21 @@
 
 **最终提交**：`5ddc284 feat(ingestion): wire schema-driven GraphRAG into upload pipeline`，已推 origin/main。
 
+
+### [Copilot] 2026-04-23 — 【二次修复】Grounding Gate 过严 + 多芯片识别缺失
+
+**用户反馈**：3 次真实查询暴露 2 个体验问题：
+1. `XCKU5PFFVD900 PCIe 用户时钟频率范围` → 0 引用 abstain（实际 doc 2 含此芯片对比内容）
+2. `PH2A106FLG900 速率等级` → 答案正确但 grounding 把 `~1, ~2, ~4, ~8`、`2800 Mbps` 等近似/表格碎片当幻觉，触发 `7/17 数值无依据` abstain
+
+**修复**：
+- `src/evaluation/grounding.py`：
+  - 新增 `_APPROX_RE` + `_TABLE_FRAGMENT_RE`，extract_numeric_facts 跳过 `≈ ~ 约` 前缀和 `~1` 类表格碎片
+  - `RetrievalGateConfig.max_unsupported_ratio: 0.40 → 0.60`，`min_unsupported_count: 5`（双门槛，避免单点误判）
+  - abstain 触发改要求 `total >= 5`（之前 3）
+- `src/api/routers/documents.py`：新增 `_store_co_mentioned_chips()`，扫描全文中其它出现 ≥3 次的芯片型号，自动建 Chip 行 + chip_alternatives 'comention' 边。这样 doc "PH2A106FLG900 vs XCKU5PFFVD900" 上传后 XCKU5PFFVD900 也会被注册为可检索芯片
+- `tests/unit/eval/test_grounding.py`：补 1 个 approximate-value test，更新 abstain 测试匹配新双门槛
+
+**验证**：22/22 grounding 测试通过；ruff 0 报错；uvicorn 重启后 7/7 服务就绪。
+
+**遗留**：现有 3 篇文档需要重新 ingest 才能让 co-mentioned chips 落库。代码已就绪，等用户在前端点 "Re-ingest" 即可。
