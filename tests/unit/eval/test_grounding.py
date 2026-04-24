@@ -243,3 +243,37 @@ class TestEarlyStop:
             stopped_reason="token_budget_exhausted",
         )
         assert rep.abstain is False
+
+
+class TestExtractRobustness:
+    """Regression tests for false-positive numeric facts caused by mangled
+    slicing offsets between normalized and original text."""
+
+    def test_no_garbled_fragments_from_spaced_units(self) -> None:
+        """text with 'Mb /s' (spaces around slash) gets normalized to 'mb/s'.
+        Pre-fix bug: offsets drifted and raw became 'b /s ' or stray markdown
+        punctuation. Post-fix: raw is the matched substring on the normalized
+        text, always well-formed `<number><space?><unit>`.
+        """
+        sample = (
+            "**对比**: PH2A106FLG900 提供 26.6 Gb /s 收发器，"
+            "电源 0.9 V，最大 300 MHz。\n"
+            "| **Power** | 0.9 V |\n"
+            "| **Speed** | 26.6 Gb/s |\n"
+        )
+        facts = extract_numeric_facts(sample)
+        assert len(facts) > 0
+        bad_fragments = ("**", "* |", ") |", "| ")
+        for f in facts:
+            for bad in bad_fragments:
+                assert bad not in f.raw, f"garbled raw {f.raw!r}"
+            # every raw must contain a digit AND an alphanumeric unit char or %
+            assert any(c.isdigit() for c in f.raw)
+            assert any(c.isalpha() or c == "%" for c in f.raw)
+
+    def test_lone_decimal_or_marker_not_extracted(self) -> None:
+        """Lone '1.' or '0.' from numbered lists / table separators must not
+        become facts (they have no unit)."""
+        sample = "1. Power: high\n2. Speed: fast\n| 0. | foo |\n"
+        facts = extract_numeric_facts(sample)
+        assert facts == []

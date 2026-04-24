@@ -687,3 +687,47 @@ CI 已有 4 个 workflow（lint / backend-test / frontend / security-scan），C
 - 加 staging 环境 workflow（push develop → deploy staging）
 - 蓝绿/金丝雀部署（compose scale + nginx 切流）
 - Deploy 失败自动回滚到上一个 sha tag
+
+---
+
+## 2026-04-24 03:25 — Copilot · 修复 grounding 误报（"**: 1." 等乱码 fact）
+
+**用户反馈**: "PH2A106FLG900 和 XCKU5PFFVD900 是什么" 这类定义/对比题被强制 abstain，
+未支持 fact 显示为 `**: 1.`、`* | 0.`、`) | 0.` —— 明显是乱码。
+
+### 根因
+
+`src/evaluation/grounding.py::extract_numeric_facts` 的 bug：
+- 在 `norm = _normalize(text)` 后正则匹配
+- `_normalize` 会折叠 `Mb /s` → `mb/s`（`re.sub(r"\s*/\s*", "/", text)`），
+  导致 norm 比 text 短若干字符
+- 然后 `text[m.start():m.end()]` 用 norm 的偏移切原始 text → **错位切片**
+- 切出来的就是 `**: 1.`、`* | 0.` 等 markdown 表格碎片
+- 这些碎片永远在 chunk 里找不到 → unsupported_ratio 直接爆 → abstain
+
+### 修复
+
+`src/evaluation/grounding.py`:
+1. `raw_slice = m.group(0).strip()` 取**正则匹配本身**，永远是 `<数字><单位>` 形态
+2. 新增 `_VALID_RAW_RE = re.compile(r"\d.*?[a-zA-Zμ°%]")` 二次过滤：raw 必须包含数字 + 字母/百分号
+
+`tests/unit/eval/test_grounding.py`: 新增两条回归测试：
+- 含 `Mb /s` 的样本不再产生包含 `**`、`* |`、`) |`、`| ` 的 raw
+- 列表序号 `1.` / `0.`（无单位）不会被错误抽取
+
+### 验证
+
+- ruff: ✅
+- 24/24 grounding 测试通过（22 旧 + 2 新）
+- 真实样本验证：
+  ```
+  '26.6 gb/s' 26.6 gbps
+  '0.9 v' 0.9 v
+  '300 mhz' 300.0 mhz
+  ```
+  全部干净，无乱码
+
+### 用户后续效果
+
+之前定义/对比题因乱码 fact 误报 abstain → 修复后正常给答案 + 引用，
+仅在真有未支持的数值时才警告。

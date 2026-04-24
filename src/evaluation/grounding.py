@@ -157,11 +157,23 @@ def _parse_number(raw: str) -> float | None:
 # ---------------------------------------------------------------------------
 
 
+# Anything that doesn't contain at least one digit followed (eventually) by
+# an alpha unit char or '%' is treated as a stray fragment we should ignore.
+# Catches mangled cells like "**: 1.", "* | 0.", ") | 0." that previously
+# sneaked through when offsets between normalized and original text drifted.
+_VALID_RAW_RE = re.compile(r"\d.*?[a-zA-Zμ°%]", re.DOTALL)
+
+
 def extract_numeric_facts(text: str) -> list[NumericFact]:
     """Pull out every `<number> <unit>` occurrence from *text*.
 
     Duplicates are preserved so that coverage maths work on occurrences, not
     unique facts. Lane shorthand (`x8`, `x16`) maps to unit ``x``.
+
+    Note: ``raw`` is taken from the **normalized** match (``m.group(0)``) —
+    slicing the original text by normalized-string offsets corrupts the
+    substring whenever ``_normalize`` collapses whitespace (e.g. ``Mb /s``
+    → ``mb/s``), producing stray fragments like ``"**: 1."``.
     """
     if not text:
         return []
@@ -177,8 +189,10 @@ def extract_numeric_facts(text: str) -> list[NumericFact]:
         if _APPROX_RE.search(prefix):
             continue
         unit = _ALIAS_TO_CANON.get(m.group(2).lower(), m.group(2).lower())
-        raw_slice = text[m.start():m.end()].strip()
+        raw_slice = m.group(0).strip()
         if _TABLE_FRAGMENT_RE.match(raw_slice):
+            continue
+        if not _VALID_RAW_RE.search(raw_slice):
             continue
         out.append(NumericFact(value=number, unit=unit, raw=raw_slice))
 
@@ -190,7 +204,7 @@ def extract_numeric_facts(text: str) -> list[NumericFact]:
         prefix = norm[max(0, m.start() - 12):m.start()]
         if _APPROX_RE.search(prefix):
             continue
-        raw_slice = text[m.start():m.end()].strip()
+        raw_slice = m.group(0).strip()
         out.append(NumericFact(value=number, unit="x", raw=raw_slice))
 
     return out
