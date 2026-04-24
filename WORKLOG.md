@@ -633,3 +633,57 @@ RAG 工具返回的 chunk 全文被原样拼回下一轮 prompt → 输入 token
 - `agent.max_total_tokens` 翻倍
 - `retrieval.top_k_search` / `top_k_rerank` 调小
 - `agent.max_observation_chars` 调小（如 2000）
+
+---
+
+## 2026-04-24 03:14 — Copilot · 补全 CI/CD 全链路
+
+**用户需求**: "需要整个系统有完整的 CI/CD，CD 简单点也行"。
+
+### 之前现状
+CI 已有 4 个 workflow（lint / backend-test / frontend / security-scan），CD 缺失。
+
+### 本次新增
+
+1. **`.github/workflows/release.yml`** — push 到 main 自动构建并发布镜像到 GHCR
+   - matrix 构建 3 个镜像：`api` / `celery` / `web`
+   - 每个镜像打 3 个 tag：`latest` + `<7位sha>` + `sha-<full>`
+   - GHA cache (gha scope) 加速 Docker 层
+   - 自动跳过 docs-only 改动（paths-ignore）
+   - 用 GITHUB_TOKEN 登录 ghcr.io，无需额外 secret
+   - Job summary 输出 `docker pull` 命令方便人工复制
+
+2. **`scripts/deploy.sh`** — 单机 CD 脚本
+   - `git pull` → `docker pull` 三个镜像 → `docker compose up -d --no-deps` 仅滚动应用层（PG/Milvus/Redis 不动）→ 60s 内轮询 `/readiness` 验证
+   - 支持 `DRY_RUN=1` 预演（已实测打印计划正确）
+   - 自动从 `git remote` 推断 `IMAGE_REPO`，可用 env 覆盖
+   - 用法：`scripts/deploy.sh 6f83590` 或 `scripts/deploy.sh latest`
+
+3. **`.github/workflows/deploy.yml`** — 手动触发 CD（workflow_dispatch）
+   - 依赖 self-hosted runner（label `chipwise-prod`），在生产机上注册一次即可
+   - 输入 `tag` + `skip_pull` 两个参数
+   - `concurrency: deploy-prod` 防止并发部署
+   - 包含 setup 注释，用户照做即可
+
+### 验证
+
+- 4 个 workflow 全部 yaml 语法正确（python yaml.safe_load）
+- `DRY_RUN=1 scripts/deploy.sh` 实测：
+  - 正确推导 IMAGE_REPO=`ghcr.io/caili6/chipwise-enterprise`
+  - 正确识别所有 6 个 app service（api + 4 celery + frontend-web）
+  - 真实 curl /readiness 返回 200 (degraded，仅 redis 鉴权)
+- 既有 ruff/test workflow 不受影响
+
+### 用户使用流程
+
+**自动 CI**: 任何 push/PR → lint + test + frontend + security 自动跑（已有）
+**自动 release**: push 到 main → release.yml 自动 build + push 镜像到 GHCR
+**手动 deploy**:
+- 方式 A（带 self-hosted runner）：在 GitHub UI 点 "Run workflow" → 选 tag → 等绿
+- 方式 B（无 runner）：在生产机执行 `bash scripts/deploy.sh latest`
+
+### 后续可选增强
+
+- 加 staging 环境 workflow（push develop → deploy staging）
+- 蓝绿/金丝雀部署（compose scale + nginx 切流）
+- Deploy 失败自动回滚到上一个 sha tag

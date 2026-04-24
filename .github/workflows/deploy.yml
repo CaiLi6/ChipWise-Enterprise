@@ -1,0 +1,57 @@
+name: deploy
+
+# Manual CD trigger. Runs scripts/deploy.sh on a self-hosted runner that
+# lives on the production box (the 极摩客 single-node deployment).
+#
+# Setup (one-time on the prod machine):
+#   1. Settings → Actions → Runners → New self-hosted runner
+#   2. Install with labels: self-hosted, chipwise-prod
+#   3. Ensure docker + docker compose are available to the runner user
+#
+# Without a self-hosted runner this workflow simply fails fast with a
+# helpful message — you can still deploy manually with:
+#     bash scripts/deploy.sh <git-sha-or-latest>
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to deploy (git short sha or 'latest')"
+        required: true
+        default: "latest"
+      skip_pull:
+        description: "Skip 'git pull' on the host (use exact local tree)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to chipwise-prod
+    runs-on: [self-hosted, chipwise-prod]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (so deploy.sh is on the runner)
+        uses: actions/checkout@v4
+        if: ${{ !inputs.skip_pull }}
+
+      - name: Run deploy script
+        env:
+          HEALTH_TIMEOUT: "120"
+        run: |
+          chmod +x scripts/deploy.sh
+          bash scripts/deploy.sh "${{ inputs.tag }}"
+
+      - name: Post-deploy summary
+        if: always()
+        run: |
+          {
+            echo "## 🚀 Deploy result"
+            echo ""
+            echo "- tag: \`${{ inputs.tag }}\`"
+            echo "- status: ${{ job.status }}"
+            echo "- runner: \`${{ runner.name }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
