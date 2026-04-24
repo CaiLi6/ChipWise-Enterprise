@@ -155,10 +155,34 @@ class TestRetrievalGate:
             answer, citations,
             config=RetrievalGateConfig(
                 max_unsupported_ratio=0.3, min_unsupported_count=3,
+                numeric_abstain_mode="hard",
             ),
         )
         assert report.abstain
         assert "无法" in report.reason or "数值" in report.reason
+
+    def test_warn_mode_keeps_answer_on_numeric_failure(self) -> None:
+        """Default 'warn' mode must NOT abstain on numeric grounding failure
+        when retrieval is healthy — only the unsupported list is populated so
+        the response layer can show a banner."""
+        answer = (
+            "Clock 111 MHz, bus 222 Gbps, rail 333 V, voltage 444 V, "
+            "current 555 mA, power 666 W"
+        )
+        citations = [
+            _cite("Some unrelated datasheet paragraph", score=0.8),
+            _cite("Another unrelated chunk", score=0.7),
+        ]
+        report = check_grounding(
+            answer, citations,
+            config=RetrievalGateConfig(
+                max_unsupported_ratio=0.3, min_unsupported_count=3,
+                # numeric_abstain_mode defaults to "warn"
+            ),
+        )
+        assert report.abstain is False
+        assert len(report.unsupported) >= 3
+        assert report.reason  # banner text still set
 
     def test_disabled_gate_never_abstains(self) -> None:
         report = check_grounding(

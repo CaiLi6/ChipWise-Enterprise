@@ -95,8 +95,14 @@ grounding:
   min_citations: 2          # abstain if fewer citations
   min_top_score: 0.35       # abstain if top-1 rerank score below this
   min_mean_score: 0.25      # abstain if mean rerank score below this
-  max_unsupported_ratio: 0.40   # abstain if >40% numeric facts unverified
+  max_unsupported_ratio: 0.40   # threshold for unverified numeric facts
   numeric_rel_tol: 0.01     # 1% relative tolerance on number match
+  # When numeric grounding trips: "warn" keeps the answer + shows banner;
+  # "hard" replaces the answer with the abstain template. Default is "warn"
+  # so a few unverifiable specs in an otherwise sound definition / comparison
+  # answer don't kill the response. Retrieval-quality and early-stop failures
+  # still hard-abstain regardless.
+  numeric_abstain_mode: "warn"
 
 # --- RAG Evaluation (LLM-as-judge + online sampling + golden batches) ---
 evaluation:

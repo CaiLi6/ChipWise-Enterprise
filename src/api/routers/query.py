@@ -257,6 +257,7 @@ def _build_grounding_config(request: Request) -> Any:
             min_top_score=float(cfg.get("min_top_score", 0.35)),
             min_mean_score=float(cfg.get("min_mean_score", 0.25)),
             max_unsupported_ratio=float(cfg.get("max_unsupported_ratio", 0.40)),
+            numeric_abstain_mode=str(cfg.get("numeric_abstain_mode", "warn")),
         )
     except Exception:  # noqa: BLE001
         logger.debug("grounding config load failed", exc_info=True)

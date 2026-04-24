@@ -263,9 +263,18 @@ class RetrievalGateConfig:
     min_citations: int = 2
     min_top_score: float = 0.35
     min_mean_score: float = 0.25
-    max_unsupported_ratio: float = 0.60  # >60% unverified numbers → abstain
-    min_unsupported_count: int = 5       # need at least 5 unverified facts to abstain
+    max_unsupported_ratio: float = 0.60  # >60% unverified numbers → trigger
+    min_unsupported_count: int = 5       # need at least 5 unverified facts
     enabled: bool = True
+    # How to react when numeric-grounding thresholds trip:
+    #   "warn" — keep the LLM answer, prepend a "未在引用材料中找到数值" banner
+    #   "hard" — replace the answer with the abstain template (legacy behaviour)
+    # Retrieval-quality and early-stop failures still hard-abstain regardless,
+    # because in those cases the answer itself is untrustworthy. Numeric grounding
+    # alone is a *correction signal*, not a kill switch — abstaining on a few
+    # unverified specs in an otherwise sound definition/comparison answer is
+    # hostile UX.
+    numeric_abstain_mode: str = "warn"
 
 
 def _retrieval_signal(citations: Sequence[dict]) -> tuple[float, float]:
@@ -371,12 +380,16 @@ def check_grounding(
             unsupported_ratio > cfg.max_unsupported_ratio
             and len(report.unsupported) >= cfg.min_unsupported_count
         ):
-            report.abstain = True
             sample = ", ".join(f"`{f.raw}`" for f in report.unsupported[:3])
             report.reason = (
                 f"{len(report.unsupported)}/{report.total} 个数值无法在引用中找到依据"
                 f"（如 {sample}）"
             )
+            # In "warn" mode we keep the answer — annotate_answer() will surface
+            # the unsupported facts via the inline banner. Only "hard" mode
+            # actually abstains and replaces the answer.
+            if cfg.numeric_abstain_mode == "hard":
+                report.abstain = True
 
     return report
 

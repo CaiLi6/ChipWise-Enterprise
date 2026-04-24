@@ -731,3 +731,58 @@ CI 已有 4 个 workflow（lint / backend-test / frontend / security-scan），C
 
 之前定义/对比题因乱码 fact 误报 abstain → 修复后正常给答案 + 引用，
 仅在真有未支持的数值时才警告。
+
+---
+
+## 2026-04-24 03:55 — Copilot · grounding 默认改为 warn 模式（不再误杀定义/对比题）
+
+**用户反馈**: "PH2A106FLG900 和 XCKU5PFFVD900 是什么" 仍被 abstain。
+本次乱码片段已无（上一轮修复生效），但 8/18 个数值（如 0.85V、0.9V、1.0mm）找不到引用，
+触发 44% > 40% 阈值，**整段答案被丢弃**。
+
+### 问题分析
+
+定义/对比类问题答案天然包含很多规格数值。grounding 严格逐字匹配数字+单位，
+chunk 里写 "0.85V"、答案写 "0.85 V"、或 LLM 对 XCKU5PFFVD900（Xilinx FPGA）
+援引了通用知识但用户只上传了 PH2A 的 datasheet → 部分数值找不到很正常。
+
+把整段答案替换成 "暂无法给出可靠答案" 是过度反应：
+- 已经有 8 条引用
+- 检索分数正常
+- 答案主体（架构、定位、差异）都对
+
+### 修复
+
+引入 `numeric_abstain_mode: "warn" | "hard"`（默认 `warn`）：
+
+| 模式 | 行为 |
+|---|---|
+| `warn` (默认) | 保留 LLM 答案，顶部加 `> ⚠️ 未在引用材料中找到数值: ...` 横幅 |
+| `hard` (旧行为) | 替换答案为 abstain 模板 |
+
+**关键**: 检索质量失败（无引用 / 分数过低）和 early-stop 失败仍 hard-abstain，
+因为那种情况答案本身不可信。数值 grounding 是**纠错信号**而非**杀手**。
+
+### 改动
+
+- `src/evaluation/grounding.py`:
+  - `RetrievalGateConfig` 新增 `numeric_abstain_mode: str = "warn"`
+  - `check_grounding()` 仅在 mode=="hard" 时设 abstain=True
+- `src/api/routers/query.py` + `src/evaluation/batch_runner.py`: 透传新字段
+- `config/settings.yaml`: 默认 `numeric_abstain_mode: "warn"`
+- `tests/unit/eval/test_grounding.py`:
+  - 旧 `test_abstain_on_too_many_unsupported` 显式传 `numeric_abstain_mode="hard"`
+  - 新增 `test_warn_mode_keeps_answer_on_numeric_failure` 覆盖默认行为
+
+### 验证
+
+- ruff ✅ / 25/25 grounding 测试通过
+- uvicorn 重启加载新配置
+
+### 用户可调
+
+如果未来想恢复严苛行为，把 `config/settings.yaml`:
+```yaml
+grounding:
+  numeric_abstain_mode: "hard"
+```
