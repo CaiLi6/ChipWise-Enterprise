@@ -786,3 +786,44 @@ chunk 里写 "0.85V"、答案写 "0.85 V"、或 LLM 对 XCKU5PFFVD900（Xilinx F
 grounding:
   numeric_abstain_mode: "hard"
 ```
+
+---
+
+## 2026-04-24 04:55 — Copilot · 修复严重隐私 bug：跨用户共享会话历史
+
+**用户反馈**: 用不同账号登录看到的"最近对话"是同一份 → 隐私泄漏。
+
+### 根因
+
+`frontend/web/src/stores/query.ts` 用 **全局 localStorage key**：
+- `chipwise_sessions_v1`
+- `chipwise_current_session`
+
+无任何用户隔离。logout 也不清理。
+所以同一浏览器：A 登出后 → B 登入 → B 直接看到 A 的全部对话和提问。
+
+⚠️ 后端是没问题的（Redis key `session:{user_id}:{session_id}` 已按用户隔离），
+此 bug 纯前端，但严重程度等同于隐私泄漏。
+
+### 修复
+
+`frontend/web/src/stores/query.ts` 重构：
+1. **按用户名分桶**:
+   - `chipwise_sessions_v1::<username>`
+   - `chipwise_current_session::<username>`
+   - 未登录用 `guest` bucket
+2. **登入/登出自动切换**: `watch(() => auth.username, ...)` 触发重新加载对应 bucket
+3. **取消 pending 持久化**: 切换用户前清掉 debounce 定时器，防止旧用户数据写到新 bucket
+4. **一次性 legacy 迁移**: `migrateLegacyKeys()` 把老的全局 key 平移到当前用户的 bucket 然后删除原 key —— 老用户的历史不丢，但其他人也看不到
+
+### 验证
+
+- frontend `npm run build` ✅
+- vitest 19/19 通过
+- 逻辑：A 登入 → 写到 `chipwise_sessions_v1::A`；A 登出 watcher 触发，sessions 切到 `guest` bucket；B 登入 watcher 触发，sessions 切到 `chipwise_sessions_v1::B`（空或 B 自己的历史）
+
+### 后续可选增强
+
+- 用 user_id 而非 username 作 bucket key（避免改名场景）
+- "退出登录"按钮可加二级确认 + "清除本机历史"选项（彻底删 bucket）
+- 会话历史改为后端持久化（PG `conversations` 表已有 schema），跨设备同步

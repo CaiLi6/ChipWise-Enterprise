@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { Citation } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system'
@@ -16,8 +17,8 @@ export interface ChatSession {
   updatedAt: number
 }
 
-const STORAGE_KEY = 'chipwise_sessions_v1'
-const CURRENT_KEY = 'chipwise_current_session'
+const STORAGE_PREFIX = 'chipwise_sessions_v1'
+const CURRENT_PREFIX = 'chipwise_current_session'
 const DEFAULT_TITLE = '新对话'
 const TITLE_MAX_LEN = 14
 
@@ -25,9 +26,31 @@ function genId(): string {
   return `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 }
 
-function loadSessions(): ChatSession[] {
+// ---------------------------------------------------------------------------
+// Per-user storage keys
+//
+// Conversations are stored in localStorage which is shared across all users on
+// the same browser. Without namespacing, logging out as user A and back in as
+// user B would let B see A's chat history — a privacy leak. We key every
+// session-related entry by the active username.
+// ---------------------------------------------------------------------------
+function userKey(username: string): string {
+  // 'guest' bucket is used before login so that anonymous browsing still works
+  // but never bleeds into a real account's history.
+  return username && username.trim() ? username.trim() : 'guest'
+}
+
+function sessionsKey(username: string): string {
+  return `${STORAGE_PREFIX}::${userKey(username)}`
+}
+
+function currentKey(username: string): string {
+  return `${CURRENT_PREFIX}::${userKey(username)}`
+}
+
+function loadSessions(username: string): ChatSession[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(sessionsKey(username))
     if (!raw) return []
     const parsed = JSON.parse(raw) as ChatSession[]
     return Array.isArray(parsed) ? parsed : []
@@ -46,19 +69,71 @@ function freshSession(): ChatSession {
   }
 }
 
+// One-time legacy migration: if the OLD un-namespaced keys exist, move them
+// under the current user's bucket and delete the originals so nobody else
+// inherits them. Safe to call repeatedly.
+function migrateLegacyKeys(username: string): void {
+  try {
+    const legacySessions = localStorage.getItem(STORAGE_PREFIX)
+    const legacyCurrent = localStorage.getItem(CURRENT_PREFIX)
+    if (legacySessions !== null) {
+      // Only adopt if the new bucket is empty so we don't overwrite real data.
+      if (localStorage.getItem(sessionsKey(username)) === null) {
+        localStorage.setItem(sessionsKey(username), legacySessions)
+      }
+      localStorage.removeItem(STORAGE_PREFIX)
+    }
+    if (legacyCurrent !== null) {
+      if (localStorage.getItem(currentKey(username)) === null) {
+        localStorage.setItem(currentKey(username), legacyCurrent)
+      }
+      localStorage.removeItem(CURRENT_PREFIX)
+    }
+  } catch {
+    // ignore — quota or disabled storage
+  }
+}
+
 export const useQueryStore = defineStore('query', () => {
-  const sessions = ref<ChatSession[]>(loadSessions())
-  const currentSessionId = ref<string>(localStorage.getItem(CURRENT_KEY) || '')
+  const auth = useAuthStore()
+
+  // Migrate any pre-namespaced data into the current user's bucket once.
+  migrateLegacyKeys(auth.username)
+
+  const sessions = ref<ChatSession[]>(loadSessions(auth.username))
+  const currentSessionId = ref<string>(
+    localStorage.getItem(currentKey(auth.username)) || '',
+  )
   const isStreaming = ref(false)
 
-  // Bootstrap: ensure at least one session + valid current pointer
-  if (sessions.value.length === 0) {
-    const s = freshSession()
-    sessions.value.push(s)
-    currentSessionId.value = s.id
-  } else if (!sessions.value.find((s) => s.id === currentSessionId.value)) {
-    currentSessionId.value = sessions.value[0].id
+  function bootstrap() {
+    if (sessions.value.length === 0) {
+      const s = freshSession()
+      sessions.value = [s]
+      currentSessionId.value = s.id
+    } else if (!sessions.value.find((s) => s.id === currentSessionId.value)) {
+      currentSessionId.value = sessions.value[0].id
+    }
   }
+
+  bootstrap()
+
+  // When the user changes (login, logout, account switch) reload sessions
+  // from THAT user's localStorage bucket so we never display another user's
+  // history. Critical for privacy on shared browsers.
+  watch(
+    () => auth.username,
+    (newUser) => {
+      // Cancel any pending writes to the previous user's bucket.
+      if (persistTimer) {
+        clearTimeout(persistTimer)
+        persistTimer = null
+      }
+      sessions.value = loadSessions(newUser)
+      currentSessionId.value = localStorage.getItem(currentKey(newUser)) || ''
+      bootstrap()
+    },
+  )
 
   const currentSession = computed<ChatSession>(
     () => sessions.value.find((s) => s.id === currentSessionId.value) || sessions.value[0],
@@ -77,8 +152,8 @@ export const useQueryStore = defineStore('query', () => {
     if (persistTimer) clearTimeout(persistTimer)
     persistTimer = setTimeout(() => {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.value))
-        localStorage.setItem(CURRENT_KEY, currentSessionId.value)
+        localStorage.setItem(sessionsKey(auth.username), JSON.stringify(sessions.value))
+        localStorage.setItem(currentKey(auth.username), currentSessionId.value)
       } catch {
         // quota errors ignored
       }
@@ -122,7 +197,6 @@ export const useQueryStore = defineStore('query', () => {
     if (!s) return
     s.messages.push(msg)
     s.updatedAt = Date.now()
-    // Auto-title from first user message
     if (msg.role === 'user' && (!s.title || s.title === DEFAULT_TITLE)) {
       const clean = msg.content.trim().slice(0, TITLE_MAX_LEN)
       if (clean) s.title = clean
