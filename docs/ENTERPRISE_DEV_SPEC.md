@@ -1,15 +1,15 @@
 # ChipWise Enterprise — 芯片数据智能检索与分析平台
 
-## Architecture Design Specification v5.7
+## Architecture Design Specification v5.8
 
 | 属性 | 值 |
 |------|-----|
 | **文档编号** | CW-ARCH-2026-001 |
-| **版本** | 5.7.0 |
+| **版本** | 5.8.0 |
 | **状态** | Approved |
 | **作者** | Enterprise AI Architecture Team |
 | **审批** | CTO Office |
-| **生效日期** | 2026-04-22 |
+| **生效日期** | 2026-04-24 |
 | **密级** | 内部公开 (Internal) |
 
 ---
@@ -30,6 +30,7 @@
 | 5.5 | 2026-04-14 | **工程化全量加固 (Phase 11)**: Backend test CI + 覆盖率门禁 (78%); pre-commit hooks; Prometheus alert rules + 3 Grafana dashboards; 安全扫描基线 (Bandit/pip-audit/npm-audit); 主应用 Dockerfile + docker-compose.prod.yml; docs/ARCHITECTURE.md + CONTRIBUTING.md + PR/issue 模板; Playwright E2E 14 specs; SBOM + 许可证审计; 测试 seed data + Locust ramp profiles; Gradio deprecated | Enterprise AI Architecture Team |
 | 5.6 | 2026-04-22 | **评估系统 + 端到端 RAG 修复 + 前端 UX 加固 (Phase 12)**: 8 指标 RAG 评估闭环 (faithfulness / answer_relevancy / context_precision / context_recall / citation_coverage / latency_score / citation_diversity / agent_efficiency)，qwen3-1.7b LLM-as-judge + 10% 在线采样 + `/api/v1/evaluations/*` + Vue3 `/evaluations` 8 标签页仪表板 + 黄金集 batch run；BM25 稀疏检索可插拔（`retrieval.sparse_method: bgem3\|bm25`，Milvus 2.5 Function 自动生成 `bm25_vector`）；Agent System Prompt 升级为分层回答模板 (结论 / 关键参数 / 对比 / 来源 + GFM 表 + LaTeX)；SSE 流式按字符分块保留换行以驱动前端 Markdown 渲染；前端接入 `marked` + `DOMPurify` + `KaTeX` 并重绘引用为紧凑芯片式 chip (tooltip 显预览 + 三档色点)；LM Studio context=40960 稳定 1.7B 评判；修复 `query.py` `.split()` 吞换行、auth 由内存迁至 PostgreSQL | Enterprise AI Architecture Team |
 | 5.7 | 2026-04-22 | **幻觉抑制 — 数字对齐校验 + 拒答机制 (Phase 12.1)**: `src/evaluation/grounding.py` 正则提取回答中所有 `<数值 单位>` 事实（MHz/GT/s/Gbps/V/W/°C/lane `x8` 等 30+ 单位族 + 中英文别名），与检索 chunk 建立归一化索引逐一比对（1% 相对容差）；同时引入**检索质量闸**：引用 <2 条 / top-1 rerank <0.35 / 均分 <0.25 / 未命中数值占比 >40% 四条规则任一触发即**整段替换为拒答模板**（"暂无法给出可靠答案" + 原因 + 改写建议）；部分未命中降级为 `> ⚠️ 未在引用材料中找到数值` banner 附于原答案上方；所有阈值通过 `settings.yaml::grounding.*` 热配置，`enabled: false` 可整体关闭；失败自动 bypass 不阻塞；延迟 <1 ms；17 个单测覆盖单位别名 / 容差 / 拒答路径 / 注解路径 | Enterprise AI Architecture Team |
+| 5.8 | 2026-04-24 | **持续优化 + 用户体验闭环 (Phase 12.2-12.5)**: (1) **GraphRAG ingestion 闭环** — `extract_chip_relations` schema-driven 实体/关系抽取 + Kùzu 同步随上传自动触发，反查与共提及链路打通 (`rag_search` co-mention reverse-expansion)；(2) **Agent 预算再扩** — `max_total_tokens 40960 → 131072` + 新增 `max_observation_chars: 4000` 在 ReAct 迭代间截断 RAG observation，避免长上下文中途吃光预算；(3) **Grounding warn 模式** — 新增 `numeric_abstain_mode: "warn" \| "hard"` (默认 warn)，定义/对比类回答不再因少量未验证数字被整段拒答，仅顶部 banner 提示；同时修复 raw 提取使用 `m.group(0)` 防止偏移错位产生乱码 (`**: 1.`)；(4) **Privacy 命名空间** — 会话历史改为 `chipwise_sessions_v1::<username>` 桶 + `watch(auth.username)` 切换重载 + 旧 key 自动迁移，杜绝同浏览器多账号串数据；(5) **Auth 体验** — `access_token` 30min → 8h、`refresh_token` 7d → 30d；前端解析 JWT `exp` 在到期前 60s 主动 refresh + 并发合并；SSE `/query/stream` 走 fetch 单独处理 401 透明 refresh + 重试 1 次，长回答中途过期不再丢答案；(6) **Compare 页重构** — 接入真实 `/api/v1/chips`、LLM 综合分析 + 引用 + 分组 + Markdown 导出；(7) **CI/CD 完整化** — `.github/workflows/release.yml` 矩阵构建 api/celery/web → GHCR + `deploy.yml` self-hosted runner manual dispatch + `scripts/deploy.sh` 单机滚动部署 + `/readiness` 烟测；(8) **登录/注册 UI 大改版** — 对标 Linear×Vercel 左右分屏 (深色渐变 brand + 动态发光球体 + 网格遮罩 + 极简白底原生表单 + 黑色主按钮 + SSO 三列)，响应式 980px 塌陷 | Enterprise AI Architecture Team |
 
 ---
 
@@ -2459,7 +2460,7 @@ class BaseGraphStore(ABC):
 │  │  • Token 预算: 单轮最多 5 次 Tool Call, 总 token < 8192     │  │
 │  └──────────────────────────────────────────────────────────────┘  │
 │                                                                    │
-│  ┌─── ReAct Loop (最多 max_iterations=6, max_total_tokens=40960) ─┐  │
+│  ┌─── ReAct Loop (最多 max_iterations=6, max_total_tokens=131072) ─┐  │
 │  │  [Thought] → [Action: Tool Call] → [Observation] → ...      │  │
 │  │  信息充分 → [Final Answer]                                   │  │
 │  └──────────────────────────────────────────────────────────────┘  │
@@ -2478,8 +2479,9 @@ class BaseGraphStore(ABC):
 ```python
 @dataclass
 class AgentConfig:
-    max_iterations: int = 6           # Phase 12.1: bumped from 5 to give Agent room for sql_query → rag_search compound flows
-    max_total_tokens: int = 40960     # Phase 12.1: bumped from 8192 to fit 40K-context LM Studio re-loaded models
+    max_iterations: int = 6              # Phase 12.1: bumped from 5 to give Agent room for sql_query → rag_search compound flows
+    max_total_tokens: int = 131072       # Phase 12.2: bumped 8192 → 40960 → 131072 for 128K-context models, prevent mid-retrieval exhaustion
+    max_observation_chars: int = 4000    # Phase 12.2: truncate per-tool observations between ReAct iterations to protect token budget
     parallel_tool_calls: bool = True
     temperature: float = 0.1        # 主推理模型参数
     tool_timeout: float = 30.0
@@ -3720,6 +3722,9 @@ W1-2        W3-4        W5-7        W8-10       W11-13      W14-16
 | **Phase 12: 评估 + UX** | Week 22 | 8 指标评估闭环 + /evaluations 仪表板 + Markdown/KaTeX 渲染 + 引用 chip + SSE 修复 + BM25 切换 | 21 |
 | **Phase 12.1: 幻觉抑制** | Week 22 | 数字对齐校验 + 检索质量闸 + 中文拒答模板 + Agent 提前停止哨兵 + max_total_tokens 8192→40960 + max_iterations 5→6 | 4 |
 | **Phase 12.2: 聊天 UI 视觉重构** | Week 22 | MessageBubble Vercel/Linear 级重写：极简表头、callout 自动检测、KaTeX/Markdown 排版、CitationCard 中性化色板 | 1 |
+| **Phase 12.3: GraphRAG 闭环** | Week 23 | schema-driven 实体/关系抽取随上传同步至 Kùzu + `rag_search` 共提及反向扩召回；Compare 页接入 `/api/v1/chips` 真实数据 + LLM 综合分析 | 3 |
+| **Phase 12.4: 预算与基础设施** | Week 23 | Agent `max_total_tokens` 40960→131072 + 新增 `max_observation_chars: 4000`；Grounding `numeric_abstain_mode: warn\|hard` + raw 提取错位修复；CD 流水线 (release.yml + deploy.yml + scripts/deploy.sh) | 4 |
+| **Phase 12.5: 用户体验闭环** | Week 23 | Privacy 命名空间 (`chipwise_sessions_v1::<user>`) + watch+迁移；Auth TTL 30min→8h / 7d→30d + JWT exp 主动 refresh + SSE 401 透明重试；登录/注册 UI Linear×Vercel 大改版 | 3 |
 
 > **详细任务排期、验收标准和测试方法请参考 [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)**
 
@@ -3843,6 +3848,7 @@ retrieval:
 # --- Grounding (post-answer numeric verification + retrieval gate) ---
 grounding:
   enabled: true
+  numeric_abstain_mode: warn   # "warn" (banner only, default) | "hard" (replace whole answer with refusal)
   min_citations: 2          # abstain if fewer citations
   min_top_score: 0.35       # abstain if top-1 rerank score below this
   min_mean_score: 0.25      # abstain if mean rerank score below this
@@ -3863,12 +3869,13 @@ rate_limit:
   global_primary_llm_concurrent: 2
   global_router_llm_concurrent: 10
 
-# --- Agent Orchestrator (v3.0; Phase 12.1 budget bump) ---
+# --- Agent Orchestrator (v3.0; Phase 12.2 budget bump) ---
 agent:
-  max_iterations: 6           # was 5 — give Agent room for sql_query → rag_search compound flows
-  max_total_tokens: 40960     # was 8192 — fit 40K-context LM Studio re-loaded models, pair w/ grounding gate
+  max_iterations: 6                  # was 5 — give Agent room for sql_query → rag_search compound flows
+  max_total_tokens: 131072           # was 40960 — fit 128K-context LM Studio re-loaded models, prevent mid-retrieval exhaustion
+  max_observation_chars: 4000        # truncate per-tool RAG observation between ReAct iterations to protect token budget
   parallel_tool_calls: true
-  temperature: 0.1          # 主推理模型; 路由模型固定 temperature=0
+  temperature: 0.1                   # 主推理模型; 路由模型固定 temperature=0
   tool_timeout: 30.0
 
 # --- Graph Store (v3.0) ---
@@ -3918,8 +3925,8 @@ auth:
     algorithm: "RS256"
     private_key_path: "/run/secrets/jwt-private.pem"
     public_key_path: "/run/secrets/jwt-public.pem"
-    access_token_expire_minutes: 30
-    refresh_token_expire_days: 7
+    access_token_expire_minutes: 480   # 8h — internal tool, balance security vs UX (Phase 12.5)
+    refresh_token_expire_days: 30      # 30d — long-lived; rotated on every refresh; FE proactively refreshes 60s before exp
   local_fallback:
     enabled: true
     jwt_secret: "${JWT_SECRET_KEY}"

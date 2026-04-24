@@ -888,3 +888,25 @@ grounding:
 
 **Commit**: 见下方 git log。
 
+
+---
+
+## 2026-04-24 · GitHub Copilot · DEVSPEC v5.8 对齐
+
+**目的**: 用户依赖 DEVSPEC 学习项目，需把 v5.7 之后这一周累计的 17 个 commit 全部回贴到规格说明书中。
+
+**改动 (`docs/ENTERPRISE_DEV_SPEC.md`)**:
+- 版本头 v5.7.0 → **v5.8.0** (生效日期 2026-04-24)
+- 新增 v5.8 变更行，覆盖 Phase 12.2-12.5 (GraphRAG 闭环 / Agent 预算再扩 / Grounding warn / Privacy 命名空间 / Auth 体验 / Compare 重构 / CI/CD / 登录页改版)
+- §4.8 `AgentConfig`：`max_total_tokens 40960 → 131072` + 新增 `max_observation_chars: 4000`
+- §4.8 ASCII 流程图同步：`ReAct Loop (max_total_tokens=131072)`
+- §6.2 phase 表新增 Phase 12.3 / 12.4 / 12.5 三行
+- §7.1 `settings.yaml` 块同步：
+  - `agent.max_total_tokens: 131072` + `max_observation_chars: 4000`
+  - `auth.jwt.access_token_expire_minutes: 480`、`refresh_token_expire_days: 30`
+  - `grounding.numeric_abstain_mode: warn`
+
+**镜像同步**: `CLAUDE.md` + `.github/copilot-instructions.md` 同步标 v5.8。
+
+**Commit**: 见下方 git log。
+
