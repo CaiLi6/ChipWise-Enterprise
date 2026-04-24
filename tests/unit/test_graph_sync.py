@@ -14,7 +14,7 @@ class TestGraphSynchronizer:
     def pool(self) -> AsyncMock:
         conn = AsyncMock()
         conn.fetchrow.return_value = {
-            "chip_id": 1, "part_number": "STM32F407", "manufacturer": "ST"
+            "id": 1, "part_number": "STM32F407", "manufacturer": "ST"
         }
         conn.fetch.return_value = []  # Default: no related records
 
@@ -66,7 +66,8 @@ class TestGraphSynchronizer:
             nonlocal call_count
             call_count += 1
             if call_count == 1:
-                return [{"param_id": 10, "name": "VDD", "value": "3.3"}]
+                return [{"id": 10, "parameter_name": "VDD", "parameter_category": "electrical",
+                          "min_value": "3.0", "typ_value": "3.3", "max_value": "3.6", "unit": "V"}]
             return []
         conn.fetch = mock_fetch
 

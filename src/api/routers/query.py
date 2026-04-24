@@ -48,7 +48,6 @@ def _get_or_create_orchestrator() -> Any:
         from src.agent.tools.rag_search import RAGSearchTool
         from src.api.dependencies import get_settings
         from src.libs.embedding.factory import EmbeddingFactory
-        from src.libs.graph_store.factory import GraphStoreFactory
         from src.libs.llm.factory import LLMFactory
         from src.libs.reranker.factory import RerankerFactory
         from src.libs.vector_store.factory import VectorStoreFactory

@@ -525,3 +525,29 @@
 9. WORKLOG 归档机制
 10. follow-up 共指消解（router 模型重写 query）
 11. co-mention 阈值按 doc 长度归一化
+
+### [Copilot] 2026-04-24 — 第 3 轮深度优化（6 项 roadmap 一次性收口）
+
+回答用户"持续优化直到完美"。从上轮列出的 11 项 roadmap 中挑了 6 项可立刻闭环的，全部完成：
+
+1. **abstain-msg**: `grounding.py annotate_answer` 现按 reason 类型给出针对性建议（数值类 / 引用类 / 预算类）+ 在 reason 文末附前 3 个未支撑的具体数值，便于用户定位。
+2. **comention-norm**: `_store_co_mentioned_chips` 阈值按 doc 长度分档（≤4k → 2 次，≤30k → 3 次，≤100k → 4 次，更长 → 5 次），避免长 datasheet 误报。
+3. **sse-frontend**: 前端 `QueryView.vue` 早已接 `/query/stream`（`streamQuery` from `@/api/query.ts`），核实并标记完成。
+4. **pdf-jump**: 新增后端 `GET /api/v1/documents/{id}/file`（FileResponse 流式）+ 前端 `CitationCard.vue` 引用 chip 现在是可点击 link，打开 `…/file#page=N` 浏览器原生 PDF viewer 自动跳页。已在 doc_id=9 实测 200 OK + 874KB PDF。
+5. **e2e-smoke**: 新增 `tests/unit/test_query_smoke_e2e.py`，TestClient + dependency_overrides 注入 stub orchestrator + UserInfo，全程不依赖 LM Studio/PG/Milvus 即可验证 `/api/v1/query` 完整链路（agent → grounding → response）。CI 友好。
+6. **llm-extract-fix**: `param_extraction.txt` 加 few-shot 示例 + 显式空表回退 `[]`；`param_extractor.py` `max_tokens` 4000 → 8000（让 qwen3 reasoning 的 `<think>` 块有空间），新增"0 params 时追加禁 think 重试"。同时把 `.format()` 改为 `.replace()` 避免 JSON 大括号冲突。
+
+**附带修复**: `tests/unit/test_graph_sync.py` 的两个 fixture 用错 column 名（`chip_id`/`param_id` 应为 `id`），导致 `test_sync_chip_basic` / `test_sync_with_params` 长期红色—顺手修了。
+
+**验证**: 
+- 740 unit tests pass / 7 skipped（之前 738 pass + 2 fail）
+- ruff 0 报错
+- 前端 `npm run build` 通过
+- uvicorn 重启 7/7 ready，PDF 文件流端点 200 OK 实测
+
+**仍剩 5 项 roadmap**（按价值排序）：
+- LLM 参数抽取真实跑通验证（需要触发一次 ingest，hardware 慢）
+- PaddleOCR 实跑（需扫描件样本）
+- Prometheus + Grafana 仪表盘
+- query-type 自适应混排权重
+- follow-up 共指消解（router 模型改写 query）

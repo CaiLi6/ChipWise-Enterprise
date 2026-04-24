@@ -24,6 +24,7 @@ from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 
 from src.api.dependencies import get_db_pool
 
@@ -214,6 +215,30 @@ async def get_document(
             "celery_task_id": row["celery_task_id"],
         },
     }
+
+
+@router.get("/{doc_id}/file")
+async def get_document_file(
+    doc_id: int,
+    db_pool: Any = Depends(get_db_pool),  # noqa: B008
+) -> FileResponse:
+    """Stream the original PDF/XLSX file so the frontend can deep-link
+    citations to the source page (`?page=N` query handled client-side
+    by the PDF viewer)."""
+    if db_pool is None:
+        raise HTTPException(503, "Database unavailable")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT file_path, file_name FROM documents WHERE id = $1",
+            doc_id,
+        )
+    if row is None:
+        raise HTTPException(404, f"Document {doc_id} not found")
+    path = Path(row["file_path"])
+    if not path.exists() or not path.is_file():
+        raise HTTPException(410, "Source file no longer on disk")
+    media = "application/pdf" if path.suffix.lower() == ".pdf" else "application/octet-stream"
+    return FileResponse(path, media_type=media, filename=row["file_name"])
 
 
 # ---------------------------------------------------------------------------
@@ -744,7 +769,20 @@ async def _store_co_mentioned_chips(
     # Count whole-word occurrences for ranking
     from collections import Counter
     counts = Counter(re.findall(r"\b[A-Z][A-Z0-9\-]{4,24}\b", full_text.upper()))
-    significant = [p for p in candidates if counts.get(p, 0) >= 3]
+    # Threshold scaled by document length — short docs (≤4k chars) require
+    # only 2 mentions, average docs (≤30k) require 3, long datasheets (≤100k)
+    # require 4, very long require 5. This avoids false positives in 200-page
+    # references while still catching brief comparison notes.
+    doc_len = len(full_text)
+    if doc_len <= 4_000:
+        min_mentions = 2
+    elif doc_len <= 30_000:
+        min_mentions = 3
+    elif doc_len <= 100_000:
+        min_mentions = 4
+    else:
+        min_mentions = 5
+    significant = [p for p in candidates if counts.get(p, 0) >= min_mentions]
     # Cap to avoid runaway noise
     significant = significant[:5]
     if not significant:

@@ -13,7 +13,23 @@ Rules:
 1. Extract ALL parameters from the table — do not skip any rows.
 2. Normalize units to standard abbreviations.
 3. If a value is missing, use null (not empty string).
-4. Return ONLY the JSON array, no explanation.
+4. If the table contains no parameters (e.g., it's a layout/pin table without numeric specs), return [].
+5. Output ONLY the JSON array — no explanation, no markdown fence, no <think> wrapper.
+
+Example input:
+Chip: STM32F407
+Table (page 12):
+Parameter | Min | Typ | Max | Unit | Condition
+Supply voltage VDD | 1.8 | 3.3 | 3.6 | V | -
+Operating temperature | -40 | 25 | 85 | °C | TA, junction
+
+Example output:
+[
+  {"name": "Supply voltage VDD", "category": "electrical", "min_value": "1.8", "typ_value": "3.3", "max_value": "3.6", "unit": "V", "condition": null},
+  {"name": "Operating temperature", "category": "thermal", "min_value": "-40", "typ_value": "25", "max_value": "85", "unit": "°C", "condition": "TA, junction"}
+]
+
+Now extract from this real table:
 
 Chip: {chip_part_number}
 Table (page {page}):

@@ -55,15 +55,21 @@ class ParamExtractor:
         table_text = "\n".join(
             " | ".join(row) for row in table_rows
         )
-        prompt = self._prompt_template.format(
-            chip_part_number=chip_part_number,
-            page=page,
-            table_text=table_text,
+        # Use plain string substitution so JSON braces in the prompt template
+        # (used in the few-shot example) don't conflict with str.format().
+        prompt = (
+            self._prompt_template
+            .replace("{chip_part_number}", chip_part_number)
+            .replace("{page}", str(page))
+            .replace("{table_text}", table_text)
         )
 
         try:
+            # Generous max_tokens because qwen3 reasoning models emit a long
+            # <think> block before the actual JSON; if max_tokens cuts the
+            # output mid-think, _parse_llm_output sees nothing.
             response = await self._llm.generate(
-                prompt, temperature=0.0, max_tokens=4000
+                prompt, temperature=0.0, max_tokens=8000
             )
             raw_output = response.text if hasattr(response, "text") else str(response)
             if not raw_output:
@@ -79,6 +85,21 @@ class ParamExtractor:
                     "Param extractor produced 0 params; raw LLM output (first 400 chars): %s",
                     raw_output[:400].replace("\n", " "),
                 )
+                # Retry once with an explicit "skip thinking" reminder so the
+                # model emits the JSON directly.
+                retry_prompt = (
+                    prompt
+                    + "\n\nIMPORTANT: respond with the JSON array immediately. "
+                    "Do NOT use <think> tags. Do NOT explain. Just the JSON."
+                )
+                try:
+                    response = await self._llm.generate(
+                        retry_prompt, temperature=0.0, max_tokens=4000
+                    )
+                    raw_output = response.text if hasattr(response, "text") else str(response)
+                    params = self._parse_llm_output(raw_output)
+                except Exception:
+                    logger.exception("Param extractor retry-no-think also failed")
 
             # Validate with StructuredOutputValidator if available
             if self._validator and params:

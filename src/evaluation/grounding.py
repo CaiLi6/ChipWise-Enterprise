@@ -358,8 +358,10 @@ def check_grounding(
             and len(report.unsupported) >= cfg.min_unsupported_count
         ):
             report.abstain = True
+            sample = ", ".join(f"`{f.raw}`" for f in report.unsupported[:3])
             report.reason = (
                 f"{len(report.unsupported)}/{report.total} 个数值无法在引用中找到依据"
+                f"（如 {sample}）"
             )
 
     return report
@@ -372,14 +374,44 @@ def annotate_answer(answer: str, report: GroundingReport, abstain_template: str 
     template to avoid propagating a low-confidence response.
     """
     if report.abstain:
-        tmpl = abstain_template or (
-            "## 结论\n\n暂无法给出可靠答案。\n\n"
-            "## 原因\n\n{reason}\n\n"
-            "## 建议\n\n- 补充具体芯片型号或参数名\n"
-            "- 重新上传相关 datasheet 后再试\n"
-            "- 或联系知识库管理员补全该领域文档"
-        )
-        return tmpl.format(reason=report.reason or "证据不足")
+        # Pick suggestions that match the failure mode so the user knows what
+        # to do next instead of seeing the same generic checklist every time.
+        reason = report.reason or "证据不足"
+        if "数值" in reason:
+            suggestions = (
+                "- 改用更具体的提问，例如 *「该芯片的工作电压典型值是多少」* "
+                "（避免一次问多个数值）\n"
+                "- 检查问题中提到的型号是否与已上传 datasheet 完全一致\n"
+                "- 在管理后台确认该 datasheet 已成功 ingest 完成"
+            )
+        elif "引用" in reason or "相关度" in reason:
+            suggestions = (
+                "- 确认相关芯片的 datasheet 已上传至知识库\n"
+                "- 尝试在问题中明确加入完整型号字符串\n"
+                "- 用更通用的同义说法重述问题（例如 *用户时钟频率* → *application clock*）"
+            )
+        elif "迭代" in reason or "预算" in reason or "budget" in reason.lower():
+            suggestions = (
+                "- 拆分成多个更小的子问题分别提问\n"
+                "- 避免在单个 query 中要求对比 3 个以上参数"
+            )
+        else:
+            suggestions = (
+                "- 补充具体芯片型号或参数名\n"
+                "- 重新上传相关 datasheet 后再试\n"
+                "- 或联系知识库管理员补全该领域文档"
+            )
+
+        if abstain_template is None:
+            tmpl = (
+                "## 结论\n\n暂无法给出可靠答案。\n\n"
+                "## 原因\n\n{reason}\n\n"
+                "## 建议\n\n{suggestions}"
+            )
+            return tmpl.format(reason=reason, suggestions=suggestions)
+        # Caller-supplied template: support {reason} placeholder only,
+        # for backward compatibility.
+        return abstain_template.format(reason=reason)
 
     banner = report.summary_banner()
     if banner:

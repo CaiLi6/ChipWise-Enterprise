@@ -17,6 +17,24 @@ const scoreTier = computed<'high' | 'mid' | 'low'>(() => {
   if (s >= 0.4) return 'mid'
   return 'low'
 })
+
+// Build a deep link to the source PDF at the cited page when a doc_id is
+// available. Browsers honour the `#page=N` PDF fragment for the built-in
+// viewer, which is enough to drop the user on the right page.
+const sourceUrl = computed<string | null>(() => {
+  const did = props.citation.doc_id
+  if (did === undefined || did === null) return null
+  const base = (import.meta as any).env?.VITE_API_BASE_URL || ''
+  const page = props.citation.page_number
+  const frag = page ? `#page=${page}` : ''
+  return `${base}/api/v1/documents/${did}/file${frag}`
+})
+
+function openSource() {
+  if (sourceUrl.value) {
+    window.open(sourceUrl.value, '_blank', 'noopener')
+  }
+}
 </script>
 
 <template>
@@ -28,9 +46,17 @@ const scoreTier = computed<'high' | 'mid' | 'low'>(() => {
         <span v-if="citation.score" class="tip-score">相关度 {{ (citation.score * 100).toFixed(0) }}%</span>
       </div>
       <div class="tip-body">{{ preview }}</div>
+      <div v-if="sourceUrl" class="tip-foot">点击打开原文档 ↗</div>
     </template>
 
-    <span class="chip" :class="scoreTier">
+    <span
+      class="chip"
+      :class="[scoreTier, { clickable: !!sourceUrl }]"
+      :role="sourceUrl ? 'link' : undefined"
+      :tabindex="sourceUrl ? 0 : undefined"
+      @click="openSource"
+      @keydown.enter="openSource"
+    >
       <span v-if="index != null" class="chip-idx">{{ index }}</span>
       <span class="chip-doc">{{ docLabel }}</span>
       <span v-if="citation.page_number" class="chip-page">p.{{ citation.page_number }}</span>
@@ -100,6 +126,13 @@ const scoreTier = computed<'high' | 'mid' | 'low'>(() => {
 .chip.high .chip-bar { background: #10b981; }
 .chip.mid  .chip-bar { background: #f59e0b; }
 .chip.low  .chip-bar { background: #d1d5db; }
+.chip.clickable {
+  cursor: pointer;
+}
+.chip.clickable:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
 </style>
 
 <style>
@@ -120,5 +153,10 @@ const scoreTier = computed<'high' | 'mid' | 'low'>(() => {
   color: #e5e7eb;
   white-space: pre-wrap;
   word-break: break-word;
+}
+.citation-tooltip .tip-foot {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #93c5fd;
 }
 </style>
