@@ -497,3 +497,31 @@
 **验证**：22/22 grounding 测试通过；ruff 0 报错；uvicorn 重启后 7/7 服务就绪。
 
 **遗留**：现有 3 篇文档需要重新 ingest 才能让 co-mentioned chips 落库。代码已就绪，等用户在前端点 "Re-ingest" 即可。
+
+### [Copilot] 2026-04-24 — 系统差距清单 + P1/P2 修复
+
+回答用户"系统现在完美吗" → 不完美，列出 13 项差距（详见对话记录）。立刻执行优先级最高的两项：
+
+**P1: rag_search 接入 co-mention 反向扩展** (`src/agent/tools/rag_search.py`)
+- 当 `part_number` 过滤后命中数 < `top_k`，自动追加一次去掉 `part_number` 的宽搜，去重合并后送 reranker
+- 配合上一轮 ingestion 的 `_store_co_mentioned_chips`，彻底解决"对比 doc 中提及的芯片查询返回 0 引用"问题
+- 测试 `test_search_with_filters` 同步更新为只断言首次调用过滤器
+
+**P2: agent_system 提示词加严"禁止编造数值"** (`config/prompts/agent_system.txt`)
+- 新增 "Numeric grounding rules — CRITICAL"：所有带单位数值必须在工具结果中出现；近似值用 `约/≈` 而非 `~`；带宽换算除非源文档明写否则不输出
+- 配合上一轮 grounding gate 放宽，从两端共同治理 Q1 那种 "LLM 凭常识补 ~2 GB/s" 问题
+
+**验证**：34/34 测试通过（rag_search 12 + grounding 22）；ruff 0；uvicorn 重启 7/7 就绪。
+
+**剩余 roadmap**（按优先级）：
+1. SSE 流式接入 Vue3 前端（已有 endpoint，前端未用）
+2. PDF 引用页内高亮跳转
+3. LLM 参数抽取实际跑通（换 prompt 或换非-reasoning 模型）
+4. PaddleOCR 路径真实验证
+5. eval batches 异步堆积无人看 → 接 Prometheus + Grafana
+6. e2e smoke CI
+7. Query-type 自适应混排权重
+8. abstain reason 文案对用户更友好
+9. WORKLOG 归档机制
+10. follow-up 共指消解（router 模型重写 query）
+11. co-mention 阈值按 doc 长度归一化

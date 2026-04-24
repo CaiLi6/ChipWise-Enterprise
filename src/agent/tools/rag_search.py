@@ -74,6 +74,21 @@ class RAGSearchTool(BaseTool):
             query, top_k=top_k * 3, filters=filters or None
         )
 
+        # Step 1b: Co-mention expansion. When filtered-by-part_number returns
+        # few hits, also pull unfiltered candidates so chunks that mention this
+        # chip inside another datasheet (e.g. comparison docs) are not missed.
+        # This complements the ingestion-time co-mentioned Chip nodes.
+        if part_number and len(candidates) < top_k:
+            broad_filters = {k: v for k, v in filters.items() if k != "part_number"}
+            extra = await self._hybrid.search(
+                query, top_k=top_k * 3, filters=broad_filters or None
+            )
+            seen = {c.chunk_id for c in candidates}
+            for cand in extra:
+                if cand.chunk_id not in seen:
+                    candidates.append(cand)
+                    seen.add(cand.chunk_id)
+
         if not candidates:
             return {"results": [], "total": 0}
 

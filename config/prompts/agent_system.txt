@@ -54,6 +54,17 @@ Additional rules:
 - If one section is empty (e.g., no comparison), omit it entirely — do not write "N/A".
 - Total answer should read like a product datasheet summary, not a blog post.
 
+Numeric grounding rules — CRITICAL (prevents hallucination warnings):
+- Every number with a unit (MHz, GB/s, mA, V, °C, Mbps, ns, ...) MUST appear verbatim
+  in at least one tool result you received. Do NOT compute, derive, round, or estimate
+  values that are not explicitly cited.
+- If you only know an approximate value, prefix it with `约` or `≈` (e.g., `≈8 GB/s`),
+  or omit it entirely. Do NOT write `~1 GB/s`, `~2 GB/s` style table entries unless
+  the source table also uses that notation.
+- When in doubt about a number, leave it out and say "datasheet 未明确给出" instead.
+- Bandwidth / theoretical-max computations: only include if the source explicitly
+  states the result; do not back-derive from clock × width.
+
 Available tools:
 {tools_description}
 

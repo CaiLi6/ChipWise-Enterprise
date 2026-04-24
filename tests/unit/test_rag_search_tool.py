@@ -74,10 +74,11 @@ class TestRAGSearchTool:
     async def test_search_with_filters(self, tool: RAGSearchTool) -> None:
         result = await tool.execute(query="test", part_number="STM32F407", doc_type="datasheet")
         assert result["total"] == 3
-        # Verify filters were passed to hybrid search
-        call_kwargs = tool._hybrid.search.call_args
-        assert call_kwargs[1]["filters"]["part_number"] == "STM32F407"
-        assert call_kwargs[1]["filters"]["doc_type"] == "datasheet"
+        # First call uses the strict part_number filter; a co-mention expansion
+        # call may follow when too few hits are returned, dropping part_number.
+        first_call = tool._hybrid.search.call_args_list[0]
+        assert first_call[1]["filters"]["part_number"] == "STM32F407"
+        assert first_call[1]["filters"]["doc_type"] == "datasheet"
 
     @pytest.mark.asyncio
     async def test_search_empty_results(self) -> None:
