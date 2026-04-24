@@ -827,3 +827,33 @@ grounding:
 - 用 user_id 而非 username 作 bucket key（避免改名场景）
 - "退出登录"按钮可加二级确认 + "清除本机历史"选项（彻底删 bucket）
 - 会话历史改为后端持久化（PG `conversations` 表已有 schema），跨设备同步
+
+---
+
+## 2026-04-22 · GitHub Copilot · 登录/注册页 UI 大改版
+
+**问题**: 用户反馈登录页"太普通"，希望对标市面上 UI 做得最好的公司（Linear / Vercel / Stripe / Notion）。
+
+**改动**:
+
+- 重写 `frontend/web/src/views/LoginView.vue` 与 `RegisterView.vue` 为 **左右分屏式现代认证页**。
+- **左侧 Brand 面板**（Linear 风格）：
+  - 深色径向渐变底 (`#1a1f3a → #050610`)
+  - 三颗动态发光球体 (`orb-a/b/c`)，18s 浮动动画
+  - 网格遮罩（径向 mask）增加纵深感
+  - 大标题 + 渐变文字（紫蓝青）+ 三条产品卖点
+- **右侧表单面板**（Vercel 风格）：
+  - 极简白底，原生 `<input>` 替换 el-input（更精致的 focus ring）
+  - 黑色主按钮 + spinner，hover 微动画
+  - 密码显示切换、行内错误提示、`fade` 过渡
+  - SSO 按钮改为 3 列 icon+文字组合，hover 变品牌色
+- 注册页同款风格 + 实时校验（用户名 / 密码 / 确认 / 邮箱）+ 邮箱/部门双列布局。
+- 响应式：< 980px 自动隐藏左侧 Brand 面板。
+
+**验证**:
+- `npm run build` 清晰通过（LoginView 5.97 KB / RegisterView 6.75 KB）
+- `npx vitest run` 19/19 全部通过
+- 不依赖任何新 npm 包，纯 CSS 实现动效
+
+**Commit**: 见下方 git log。
+
