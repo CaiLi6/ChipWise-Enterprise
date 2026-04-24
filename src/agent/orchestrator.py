@@ -34,6 +34,10 @@ class AgentConfig:
     temperature: float = 0.1
     tool_timeout: float = 30.0
     llm_role: str = "primary"
+    # Truncate JSON-serialized tool observations fed back into the next
+    # ReAct round. RAG chunks are otherwise the dominant source of input
+    # token bloat and quickly exhaust max_total_tokens.
+    max_observation_chars: int = 4000
 
 
 # ------------------------------------------------------------------
@@ -161,12 +165,19 @@ class AgentOrchestrator:
             step.tool_calls = tc_requests
             step.observations = observations
 
-            # Append tool results to messages
+            # Append tool results to messages (truncated to keep prompt small)
             for tc, obs in zip(llm_response.tool_calls, observations, strict=False):
+                content = json.dumps(obs, ensure_ascii=False)
+                cap = self.config.max_observation_chars
+                if cap and len(content) > cap:
+                    content = (
+                        content[:cap]
+                        + f"\n…[truncated {len(content) - cap} chars to preserve token budget]"
+                    )
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": json.dumps(obs, ensure_ascii=False),
+                    "content": content,
                 })
 
             steps.append(step)

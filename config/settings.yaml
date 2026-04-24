@@ -130,10 +130,18 @@ rate_limit:
 # --- Agent Orchestrator ---
 agent:
   max_iterations: 6
-  max_total_tokens: 40960
+  # Bumped 40960 → 131072: tool observations (RAG chunks) inflate the
+  # cumulative input tokens fast; with 4× headroom a 5-iteration ReAct
+  # loop comfortably finishes instead of stopping with "暂无法给出答案".
+  max_total_tokens: 131072
   parallel_tool_calls: true
   temperature: 0.1
   tool_timeout: 45.0
+  # Cap how many characters of a tool observation get fed back into the
+  # next LLM round; long RAG chunks were the #1 source of budget bloat.
+  # Citations are surfaced separately by ResponseBuilder so we don't need
+  # the raw text to live inside the agent prompt.
+  max_observation_chars: 4000
 
 # --- Graph Store ---
 graph_store:

@@ -113,6 +113,7 @@ def _get_or_create_orchestrator() -> Any:
             parallel_tool_calls=settings.agent.parallel_tool_calls,
             temperature=settings.agent.temperature,
             tool_timeout=settings.agent.tool_timeout,
+            max_observation_chars=settings.agent.max_observation_chars,
         )
         _orchestrator = AgentOrchestrator(llm=llm, tool_registry=registry, config=config)
         logger.info(

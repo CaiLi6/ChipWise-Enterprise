@@ -104,6 +104,7 @@ class AgentSettings(BaseModel):
     parallel_tool_calls: bool = True
     temperature: float = 0.1
     tool_timeout: float = 30.0
+    max_observation_chars: int = 4000
 
 
 class KuzuSettings(BaseModel):

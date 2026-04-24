@@ -600,3 +600,36 @@
 
 - 利用 `chip_alternatives` 边推荐"建议对比"组合
 - AI 解读支持流式 (现在仍一次性)
+
+---
+
+## 2026-04-24 03:00 — Copilot · 修复 Agent token 预算频繁耗尽
+
+**用户反馈**: 多次提问命中 "Agent 在检索过程中用尽了 token 预算" 提示，应答失败。
+
+### 根因
+
+`AgentOrchestrator` 把每轮 LLM `total_tokens` 累加到 `TokenBudget(40960)`。
+RAG 工具返回的 chunk 全文被原样拼回下一轮 prompt → 输入 token 滚雪球 → 2-3 轮即吃满 4 万。
+
+### 修复
+
+1. **预算翻 4 倍**: `config/settings.yaml` `agent.max_total_tokens` 40960 → **131072**
+2. **截断 Tool Observation**: 新增 `agent.max_observation_chars: 4000`
+   - `src/agent/orchestrator.py` 在拼回 tool result 时按字符上限截断（保留前 4000 字符 + 提示尾标）
+   - `src/core/settings.py` `AgentSettings` + `src/api/routers/query.py` `AgentConfig` 同步加字段
+   - 引用全文不需要进 LLM 上下文：`ResponseBuilder` 单独装配 citations
+3. `llm.primary.max_tokens` 暂保持 4096（推理模型需要给思考留空间，不动）
+
+### 验证
+
+- ruff/mypy: ✅
+- 740/7 单元测试全绿
+- uvicorn 重启 7s ready，readiness 返回 degraded（仅 redis 鉴权问题，与本次无关）
+
+### 用户后续如再遇到
+
+可手工调高 `config/settings.yaml`:
+- `agent.max_total_tokens` 翻倍
+- `retrieval.top_k_search` / `top_k_rerank` 调小
+- `agent.max_observation_chars` 调小（如 2000）
