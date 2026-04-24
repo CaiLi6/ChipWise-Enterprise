@@ -115,6 +115,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Register routers
     from src.api.routers.auth import router as auth_router
+    from src.api.routers.chips import router as chips_router
     from src.api.routers.compare import router as compare_router
     from src.api.routers.documents import router as documents_router
     from src.api.routers.evaluations import router as evaluations_router
@@ -130,6 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(sso_router)
     app.include_router(documents_router)
+    app.include_router(chips_router)
     app.include_router(tasks_router)
     app.include_router(compare_router)
     app.include_router(knowledge_router)

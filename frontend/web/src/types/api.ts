@@ -38,13 +38,46 @@ export interface QueryResponse {
 // ---- Compare ----
 
 export interface CompareRequest {
-  chips: string[]
-  parameters?: string[]
+  chip_names: string[]
+  dimensions?: string[]
+}
+
+export interface CompareCellValue {
+  typ?: string | null
+  min?: string | null
+  max?: string | null
+  unit?: string | null
+  category?: string | null
+}
+
+export interface CompareCitation {
+  doc_id?: string | number
+  source?: string
+  page_number?: number
+  content?: string
+  score?: number
+  chip?: string
 }
 
 export interface CompareResult {
   chips: string[]
-  parameters: Record<string, Record<string, string>>
+  comparison_table: Record<string, Record<string, CompareCellValue | null>>
+  analysis: string
+  citations: CompareCitation[]
+}
+
+export interface ChipListItem {
+  chip_id: number
+  part_number: string
+  manufacturer: string | null
+  family: string | null
+  status: string | null
+  param_count: number
+}
+
+export interface ChipListResponse {
+  chips: ChipListItem[]
+  total: number
 }
 
 // ---- Auth (aligned with src/api/schemas/auth.py::TokenResponse) ----

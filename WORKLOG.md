@@ -551,3 +551,52 @@
 - Prometheus + Grafana 仪表盘
 - query-type 自适应混排权重
 - follow-up 共指消解（router 模型改写 query）
+
+---
+
+## 2026-04-22 23:30 — Copilot · 芯片对比页全面重构
+
+**用户反馈**: 芯片对比页"有点鸡肋"——前端写死 5 个假芯片，后端返回的 LLM 智能解读和引用全被丢弃，字段名也对不上 (`chips` vs `chip_names`、`parameters` vs `comparison_table`)。
+
+### 修复内容
+
+1. **新增后端端点 `GET /api/v1/chips`** (`src/api/routers/chips.py`)
+   - 支持 `?q=` 子串搜索 + `?limit=` 分页
+   - 返回 `{chip_id, part_number, manufacturer, family, status, param_count}`
+   - `param_count DESC, part_number ASC` 排序，参数最丰富的优先
+   - 当 db_pool 不可用时优雅返回 `{chips:[], total:0}`
+   - 注册进 `src/api/main.py`
+
+2. **前端类型对齐** (`frontend/web/src/types/api.ts`)
+   - `CompareRequest`: `chips` → `chip_names`，新增 `dimensions?: string[]`
+   - `CompareResult`: 改为 `{chips, comparison_table, analysis, citations}` 与后端一致
+   - 新增 `CompareCellValue` (typ/min/max/unit/category) 和 `ChipListItem` 类型
+
+3. **API 层瘦身** (`frontend/web/src/api/compare.ts`)
+   - 删除整段 MOCK_PARAMS（约 60 行假数据）
+   - `compareChips()` 真实 POST `chip_names`
+   - 新增 `listChips(q, limit)`
+
+4. **CompareView.vue 完全重写** (12.8 KB)
+   - 删除 `MOCK_CHIPS` 写死数据
+   - 替换为 `el-select remote` 远程搜索，下拉显示厂商 + 参数数
+   - 新增 **"AI 智能解读"** 卡片：渲染后端 LLM `analysis` (marked + DOMPurify)
+   - **按参数类别分组** (electrical/timing/thermal/...)，每组独立 `el-table`
+   - **维度过滤器**：可勾选只看电气/时序等
+   - **差异高亮** + **类别分组**两个开关
+   - 列头芯片名旁加 ✕ 一键移除
+   - 单元格智能格式化 `typ unit` (来源 CompareCellValue)
+   - 底部用现成 `<CitationCard>` 排版引用，可点击跳转 PDF
+   - **导出 Markdown** 按钮：客户端拼装报告 (元信息 + AI 解读 + 表格 + 引用) 触发下载
+
+### 验证
+
+- ruff + mypy: ✅ 通过
+- 740/7 单元测试全绿
+- frontend `npm run build` 成功 (CompareView chunk 7.44 KB → gzip 3.38 KB)
+- uvicorn 重启后实测 `curl /api/v1/chips?limit=5`：返回真实 3 颗芯片 (PH2A106FLG900 / DS1101 / XCKU5PFFVD900) 正确按参数数排序
+
+### 仍可后续优化
+
+- 利用 `chip_alternatives` 边推荐"建议对比"组合
+- AI 解读支持流式 (现在仍一次性)
