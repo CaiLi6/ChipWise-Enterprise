@@ -37,26 +37,43 @@ export async function streamQuery(
     return
   }
 
-  const token = localStorage.getItem('chipwise_token') || ''
   const base = import.meta.env.VITE_API_BASE_URL || ''
   const url = `${base}/api/v1/query/stream`
 
-  let resp: Response
-  try {
-    resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        Accept: 'text/event-stream',
-      },
-      body: JSON.stringify(data),
-    })
-  } catch {
-    onError?.(`无法连接后端 (${base || window.location.origin})`)
-    onDone()
-    return
+  // Issues a single fetch with the current token. On 401, transparently refresh
+  // and retry exactly once before surfacing an "expired" error to the user.
+  async function doFetch(allowRetry: boolean): Promise<Response | null> {
+    const token = localStorage.getItem('chipwise_token') || ''
+    let resp: Response
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'text/event-stream',
+        },
+        body: JSON.stringify(data),
+      })
+    } catch {
+      onError?.(`无法连接后端 (${base || window.location.origin})`)
+      onDone()
+      return null
+    }
+    if (resp.status === 401 && allowRetry) {
+      try {
+        const { useAuthStore } = await import('@/stores/auth')
+        await useAuthStore().refresh()
+        return doFetch(false)
+      } catch {
+        /* fall through to 401 handling below */
+      }
+    }
+    return resp
   }
+
+  const resp = await doFetch(true)
+  if (!resp) return
 
   if (!resp.ok) {
     let detail = ''

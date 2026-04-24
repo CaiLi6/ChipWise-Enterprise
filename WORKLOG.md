@@ -857,3 +857,34 @@ grounding:
 
 **Commit**: 见下方 git log。
 
+
+---
+
+## 2026-04-24 · GitHub Copilot · 修复 "登录一会就过期"
+
+**用户反馈**: 登录后没多久就被踢出，体验非常差。
+
+**根因 (3 个)**:
+1. `auth.jwt.access_token_expire_minutes: 30` —— 内部工具半小时太短
+2. **SSE 流式查询走 `fetch`、不走 axios 拦截器** —— `/api/v1/query/stream` 401 时不会自动 refresh，直接抛 "登录已过期"，且本次回答完全丢失
+3. 没有"快到期前主动 refresh"，全靠失败后被动 refresh，长时间空闲一旦发请求就先失败一次
+
+**改动**:
+- `config/settings.yaml`：access 30 min → **480 min (8h)**；refresh 7 d → **30 d**
+- `frontend/web/src/stores/auth.ts`：
+  - 解析 JWT `exp` claim（不验签）
+  - `scheduleProactiveRefresh()` 在 token 到期前 60s 主动调 refresh，刷新成功后递归排程下一次
+  - 登录成功 / 应用启动（已有 token）/ refresh 成功后都会重新排程
+  - 用 `inflightRefresh` Promise 合并并发 refresh，避免 SSE + axios + scheduler 同时 refresh
+  - logout 时清理定时器
+- `frontend/web/src/api/query.ts`：
+  - SSE `streamQuery` 提取 `doFetch(allowRetry)` helper
+  - 401 时透明 `await useAuthStore().refresh()` 然后用新 token 重试 1 次
+  - 仅当 refresh 也失败才向用户报"登录已过期"
+
+**验证**:
+- `npm run build` ✅
+- `npx vitest run` ✅ 19/19
+
+**Commit**: 见下方 git log。
+

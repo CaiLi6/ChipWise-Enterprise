@@ -199,8 +199,8 @@ auth:
     algorithm: "RS256"
     private_key_path: "./secrets/jwt-private.pem"
     public_key_path: "./secrets/jwt-public.pem"
-    access_token_expire_minutes: 30
-    refresh_token_expire_days: 7
+    access_token_expire_minutes: 480   # 8h — internal tool, balance security vs UX
+    refresh_token_expire_days: 30      # 30d — long-lived; rotated on every refresh
   local_fallback:
     enabled: true
     jwt_secret: "${JWT_SECRET_KEY}"
