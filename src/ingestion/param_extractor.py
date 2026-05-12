@@ -119,16 +119,23 @@ class ParamExtractor:
             return params
         except Exception:
             logger.exception("LLM parameter extraction failed")
-            # Retry once
-            try:
-                response = await self._llm.generate(
-                    prompt, temperature=0.0, max_tokens=2000
-                )
-                raw_output = response.text if hasattr(response, "text") else str(response)
-                return self._parse_llm_output(raw_output)
-            except Exception:
-                logger.exception("LLM param extraction retry also failed")
-                return []
+            # Retry with exponential backoff for transient failures
+            import asyncio
+            for retry_attempt in range(2):
+                wait = 2 ** retry_attempt
+                await asyncio.sleep(wait)
+                try:
+                    response = await self._llm.generate(
+                        prompt, temperature=0.0, max_tokens=2000
+                    )
+                    raw_output = response.text if hasattr(response, "text") else str(response)
+                    return self._parse_llm_output(raw_output)
+                except Exception:
+                    logger.warning(
+                        "LLM param extraction retry %d/2 also failed",
+                        retry_attempt + 1, exc_info=True,
+                    )
+            return []
 
     @staticmethod
     def _parse_llm_output(output: str) -> list[dict[str, Any]]:

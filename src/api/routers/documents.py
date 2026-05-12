@@ -57,6 +57,45 @@ _RULE_KEYWORDS = re.compile(
 _PART_NUMBER = re.compile(r"\b([A-Z][A-Z0-9\-]{3,19}\d[A-Z0-9\-]*)\b")
 
 
+def _sanitize_text(text: str) -> str:
+    """Clean text before sending to the embedding service.
+
+    Strips NUL bytes and other control chars that cause 422 errors, and
+    truncates excessively long chunks that exceed the model's max sequence.
+    """
+    text = text.replace("\x00", "")
+    text = re.sub(r"[\x01-\x08\x0b\x0c\x0e-\x1f]", " ", text)
+    max_chars = 8000
+    if len(text) > max_chars:
+        text = text[:max_chars]
+    return text.strip() or "(empty)"
+
+
+async def _llm_generate_with_retry(
+    llm: Any, prompt: str, *, max_tokens: int = 800, retries: int = 3,
+) -> str:
+    """Call llm.generate with exponential-backoff retry.
+
+    Returns the text response, or raises the last exception after all
+    retries are exhausted.  Handles RemoteProtocolError from httpx
+    (LM Studio disconnects) and generic timeouts.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(retries):
+        try:
+            resp = await llm.generate(prompt, temperature=0, max_tokens=max_tokens)
+            return resp.text if hasattr(resp, "text") else str(resp)
+        except Exception as exc:
+            last_exc = exc
+            wait = 2 ** attempt
+            logger.warning(
+                "LLM generate failed (attempt %d/%d): %s, retrying in %ds",
+                attempt + 1, retries, exc, wait,
+            )
+            await asyncio.sleep(wait)
+    raise last_exc  # type: ignore[misc]
+
+
 # ---------------------------------------------------------------------------
 # Upload + list + detail
 # ---------------------------------------------------------------------------
@@ -613,6 +652,13 @@ async def _store_errata(
     return inserted
 
 
+_ALT_KEYWORDS = re.compile(
+    r"alternat|equivalent|compatible|pin.?to.?pin|drop.?in|replace|substitut|"
+    r"替代|兼容|等效|引脚.?兼容|可替换",
+    re.IGNORECASE,
+)
+
+
 async def _store_alternatives(
     db_pool: Any, llm: Any, full_text: str, chip_id: int, part_number: str,
 ) -> int:
@@ -622,6 +668,9 @@ async def _store_alternatives(
     the Kùzu ALTERNATIVE edge has both endpoints.
     """
     if not full_text or llm is None:
+        return 0
+    # Skip the LLM round-trip entirely when no compatibility keywords exist.
+    if not _ALT_KEYWORDS.search(full_text):
         return 0
     snippet = full_text[:6000]
     prompt = (
@@ -636,10 +685,9 @@ async def _store_alternatives(
         f"Excerpt:\n{snippet}"
     )
     try:
-        resp = await llm.generate(prompt, temperature=0, max_tokens=800)
-        raw = resp.text if hasattr(resp, "text") else str(resp)
+        raw = await _llm_generate_with_retry(llm, prompt, max_tokens=800)
     except Exception:
-        logger.warning("LLM alternatives call failed", exc_info=True)
+        logger.warning("LLM alternatives call failed after retries", exc_info=True)
         return 0
 
     code = re.search(r"```(?:json)?\s*(.+?)```", raw, re.DOTALL)
@@ -856,16 +904,41 @@ async def _ingest_one(doc_row: dict[str, Any], db_pool: Any) -> dict[str, Any]:
         )
 
     # ─── Embed + Milvus ───────────────────────────────────────────────
-    texts = [c["content"] for c in chunks]
-    async with httpx.AsyncClient(timeout=180) as client:
-        resp = await client.post(
-            f"{EMBED_URL}/encode",
-            json={"texts": texts, "return_sparse": True},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    dense = data["dense"]
-    sparse_raw = data.get("sparse") or [{}] * len(texts)
+    # BGE-M3 service caps requests at MAX_BATCH_SIZE=64; chunk in batches.
+    # Retry each batch up to 3 times with exponential backoff to survive
+    # transient 422 / RemoteProtocolError from the embedding service.
+    embed_batch = 64
+    texts = [_sanitize_text(c["content"]) for c in chunks]
+    dense: list[list[float]] = []
+    sparse_raw: list[Any] = []
+    async with httpx.AsyncClient(timeout=600) as client:
+        for i in range(0, len(texts), embed_batch):
+            batch = texts[i : i + embed_batch]
+            last_exc: Exception | None = None
+            for attempt in range(3):
+                try:
+                    resp = await client.post(
+                        f"{EMBED_URL}/encode",
+                        json={"texts": batch, "return_sparse": True},
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    dense.extend(data["dense"])
+                    sparse_raw.extend(data.get("sparse") or [{}] * len(batch))
+                    last_exc = None
+                    break
+                except (httpx.RemoteProtocolError, httpx.HTTPStatusError) as exc:
+                    last_exc = exc
+                    wait = 2 ** attempt
+                    logger.warning(
+                        "Embed batch %d-%d failed (attempt %d/3): %s, retrying in %ds",
+                        i, i + len(batch), attempt + 1, exc, wait,
+                    )
+                    await asyncio.sleep(wait)
+            if last_exc is not None:
+                raise HTTPException(
+                    500, f"Embedding failed after 3 retries: {last_exc}"
+                ) from last_exc
 
     inserted = await asyncio.to_thread(
         _milvus_upsert,
@@ -1115,6 +1188,51 @@ async def ingest_single(
         raise HTTPException(500, f"Ingestion failed: {exc}") from exc
 
     return {"status": "completed", **result}
+
+
+@router.post("/{doc_id}/ingest-async", status_code=202)
+async def ingest_single_async(
+    doc_id: int,
+    db_pool: Any = Depends(get_db_pool),  # noqa: B008
+) -> dict[str, Any]:
+    """Fire-and-forget version of /ingest.
+
+    Marks the row as ``processing`` and schedules ``_ingest_one`` as an
+    asyncio task so the HTTP request returns immediately. Callers poll
+    ``GET /documents/{doc_id}`` for the final ``status``.
+    """
+    if db_pool is None:
+        raise HTTPException(503, "Database unavailable")
+    async with db_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT id, file_name, file_path, doc_type, collection, status FROM documents WHERE id = $1",
+            doc_id,
+        )
+    if row is None:
+        raise HTTPException(404, f"Document {doc_id} not found")
+    if row["status"] == "processing":
+        return {"doc_id": doc_id, "status": "already_processing"}
+
+    async with db_pool.acquire() as conn:
+        await conn.execute("UPDATE documents SET status='processing' WHERE id=$1", doc_id)
+
+    row_dict = dict(row)
+
+    async def _run() -> None:
+        try:
+            await _ingest_one(row_dict, db_pool)
+        except Exception:
+            logger.exception("Async ingestion failed for doc %s", doc_id)
+            try:
+                async with db_pool.acquire() as conn:
+                    await conn.execute(
+                        "UPDATE documents SET status='failed' WHERE id=$1", doc_id
+                    )
+            except Exception:
+                logger.error("Failed to mark doc %s as failed", doc_id)
+
+    asyncio.create_task(_run())  # noqa: RUF006
+    return {"doc_id": doc_id, "status": "scheduled"}
 
 
 @router.post("/ingest-all")

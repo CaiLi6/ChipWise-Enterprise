@@ -28,7 +28,24 @@ async def parse_errata_document(
     )
 
     try:
-        raw = await llm.generate(prompt, temperature=0, max_tokens=2000)
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                raw = await llm.generate(prompt, temperature=0, max_tokens=2000)
+                last_exc = None
+                break
+            except Exception as exc:
+                last_exc = exc
+                import asyncio
+                wait = 2 ** attempt
+                logger.warning(
+                    "Errata LLM call failed (attempt %d/3): %s, retrying in %ds",
+                    attempt + 1, exc, wait,
+                )
+                await asyncio.sleep(wait)
+        if last_exc is not None:
+            raise last_exc
+
         code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", str(raw), re.DOTALL)
         output = code_block.group(1) if code_block else str(raw)
 
