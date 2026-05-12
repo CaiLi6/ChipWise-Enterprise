@@ -286,7 +286,12 @@ async def get_document_file(
 
 
 def _extract_pdf_pages(path: Path) -> list[tuple[int, str]]:
-    """Blocking PDF text extraction. Returns [(page_number, text), ...]."""
+    """Blocking PDF text extraction with OCR fallback.
+
+    First tries pdfplumber (fast, text-layer PDFs).  If no text is found
+    on any page, falls back to RapidOCR (ONNX-based, no Tesseract needed)
+    via PyMuPDF page rendering.  Returns [(page_number, text), ...].
+    """
     import pdfplumber
 
     pages: list[tuple[int, str]] = []
@@ -295,6 +300,57 @@ def _extract_pdf_pages(path: Path) -> list[tuple[int, str]]:
             text = page.extract_text() or ""
             if text.strip():
                 pages.append((idx, text))
+
+    if pages:
+        return pages
+
+    # Fallback: OCR for scanned / image-only PDFs
+    return _ocr_pdf_pages(path)
+
+
+def _ocr_pdf_pages(path: Path) -> list[tuple[int, str]]:
+    """Extract text from image-only PDFs using RapidOCR + PyMuPDF."""
+    try:
+        import fitz  # type: ignore[import-untyped]  # PyMuPDF
+        from rapidocr_onnxruntime import RapidOCR  # type: ignore[import-untyped]
+    except ImportError:
+        logger.warning("PyMuPDF or RapidOCR not installed, cannot OCR: %s", path)
+        return []
+
+    ocr_engine = RapidOCR()
+    pages: list[tuple[int, str]] = []
+
+    try:
+        doc = fitz.open(str(path))
+    except Exception:
+        logger.warning("PyMuPDF cannot open %s", path, exc_info=True)
+        return []
+
+    try:
+        for idx in range(len(doc)):
+            page = doc[idx]
+            pix = page.get_pixmap(dpi=200)
+            img_bytes = pix.tobytes("png")
+
+            import os
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+                f.write(img_bytes)
+                tmp_path = f.name
+            try:
+                result, _ = ocr_engine(tmp_path)
+            finally:
+                os.unlink(tmp_path)
+
+            if result:
+                text = " ".join(line[1] for line in result)
+                if text.strip():
+                    pages.append((idx + 1, text))
+    finally:
+        doc.close()
+
+    if pages:
+        logger.info("OCR extracted %d pages from %s", len(pages), path.name)
     return pages
 
 
