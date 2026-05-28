@@ -22,6 +22,9 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const ingestingIds = ref<Set<number>>(new Set())
 const ingestingAll = ref(false)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const detailOpen = ref(false)
@@ -44,8 +47,9 @@ async function loadGraphStats(docId: number) {
 
 async function fetchDocuments() {
   try {
-    const resp: DocumentListResponse = await listDocuments()
+    const resp: DocumentListResponse = await listDocuments(currentPage.value, pageSize.value)
     documents.value = resp.documents
+    total.value = resp.total
     error.value = null
     // Fetch graph stats in parallel for completed docs (best-effort)
     const completed = resp.documents.filter(d => d.status === 'completed' && d.doc_id)
@@ -58,6 +62,17 @@ async function fetchDocuments() {
       error.value = '获取文档列表失败'
     }
   }
+}
+
+function handlePageChange(p: number) {
+  currentPage.value = p
+  fetchDocuments()
+}
+
+function handleSizeChange(s: number) {
+  pageSize.value = s
+  currentPage.value = 1
+  fetchDocuments()
 }
 
 async function handleUpload(uploadFile: UploadFile) {
@@ -183,8 +198,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div style="padding: 24px; height: 100vh; overflow-y: auto">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px">
+  <div class="documents-page">
+    <div class="documents-header">
       <h2 style="margin: 0">文档管理</h2>
       <div style="display: flex; gap: 12px">
         <el-button
@@ -204,6 +219,7 @@ onUnmounted(() => {
         </el-upload>
       </div>
     </div>
+    <div class="documents-body">
     <LoadingError :loading="loading" :error="error" :empty="documents.length === 0" empty-text="暂无文档，请上传" @retry="fetchDocuments">
       <el-table :data="documents" border stripe>
         <el-table-column prop="filename" label="文件名" min-width="240">
@@ -267,6 +283,20 @@ onUnmounted(() => {
         </el-table-column>
       </el-table>
     </LoadingError>
+    </div>
+
+    <div v-if="total > 0" class="documents-footer">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[20, 50, 100, 200]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @current-change="handlePageChange"
+        @size-change="handleSizeChange"
+      />
+    </div>
 
     <el-drawer v-model="detailOpen" size="640px" :title="detailDoc?.filename || '文档详情'">
       <template v-if="detailDoc">
@@ -323,6 +353,33 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.documents-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 24px;
+  overflow: hidden;
+}
+.documents-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+.documents-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.documents-footer {
+  flex-shrink: 0;
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .kg-badge {
   display: flex;
   flex-wrap: wrap;

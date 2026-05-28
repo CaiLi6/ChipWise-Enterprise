@@ -94,10 +94,18 @@ class ChipCompareTool(BaseTool):
         if self._llm:
             try:
                 table_str = self._format_table(comparison_table, chip_names)
+                # Only include params where chips differ (reduce prompt size for LLM)
+                diff_table = {
+                    k: v for k, v in comparison_table.items()
+                    if len(set(str(v.get(c)) for c in chip_names)) > 1
+                }
+                if diff_table:
+                    table_str = self._format_table(diff_table, chip_names)
                 prompt = self._prompt.format(table=table_str)
-                analysis_text = str(await self._llm.generate(
-                    prompt, temperature=0.3, max_tokens=500
-                ))
+                resp = await self._llm.generate(
+                    prompt, temperature=0.3, max_tokens=4096
+                )
+                analysis_text = resp.text if hasattr(resp, "text") else str(resp)
             except Exception:
                 logger.warning("LLM comparison analysis failed", exc_info=True)
 
@@ -155,31 +163,31 @@ class ChipCompareTool(BaseTool):
         try:
             async with self._pool.acquire() as conn:
                 chip = await conn.fetchrow(
-                    "SELECT chip_id FROM chips WHERE part_number = $1",
+                    "SELECT id FROM chips WHERE part_number = $1",
                     part_number,
                 )
                 if not chip:
                     return None
 
                 query = (
-                    "SELECT name, category, typ_value, min_value, max_value, unit"
+                    "SELECT parameter_name, parameter_category, typ_value, min_value, max_value, unit"
                     " FROM chip_parameters WHERE chip_id = $1"
                 )
-                args: list[Any] = [chip["chip_id"]]
+                args: list[Any] = [chip["id"]]
 
                 if dimensions:
                     placeholders = ", ".join(f"${i+2}" for i in range(len(dimensions)))
-                    query += f" AND category IN ({placeholders})"
+                    query += f" AND parameter_category IN ({placeholders})"
                     args.extend(dimensions)
 
                 rows = await conn.fetch(query, *args)
                 return {
-                    row["name"]: {
+                    row["parameter_name"]: {
                         "typ": row["typ_value"],
                         "min": row["min_value"],
                         "max": row["max_value"],
                         "unit": row["unit"],
-                        "category": row["category"],
+                        "category": row["parameter_category"],
                     }
                     for row in rows
                 }

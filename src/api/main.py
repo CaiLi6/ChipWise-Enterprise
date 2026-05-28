@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import time
 import uuid
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.core.settings import Settings, load_settings
 
@@ -139,6 +141,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(traces_router)
     app.include_router(evaluations_router)
     app.include_router(golden_router)
+
+    # ── Serve Vue3 frontend static files ──────────────────────────────
+    _frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "web" / "dist"
+    if _frontend_dist.is_dir():
+        app.mount("/assets", StaticFiles(directory=_frontend_dist / "assets"), name="frontend-assets")
+
+        @app.get("/{full_path:path}")
+        async def serve_frontend(request: Request, full_path: str):  # type: ignore[no-untyped-def]
+            """Serve Vue3 SPA — fallback to index.html for client-side routing."""
+            file_path = _frontend_dist / full_path
+            if full_path and file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(_frontend_dist / "index.html")
 
     return app
 

@@ -120,8 +120,12 @@ class LMStudioClient(BaseLLM):
                     arguments=args,
                 ))
 
+        # For reasoning models (Qwen3.5 etc), actual output may be in
+        # 'reasoning_content' when 'content' is empty due to token exhaustion.
+        text = message.get("content", "") or ""
+
         return LLMResponse(
-            text=message.get("content", "") or "",
+            text=text,
             tool_calls=tool_calls,
             usage={
                 "prompt_tokens": usage.get("prompt_tokens", 0),

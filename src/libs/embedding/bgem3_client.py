@@ -42,7 +42,7 @@ class BGEM3Client(BaseEmbedding):
             data = resp.json()
 
         dense = data.get("dense", [])
-        sparse = data.get("sparse", [])
+        sparse = data.get("sparse") or []
         # Convert sparse from list-of-dicts with string keys to int keys
         sparse_parsed: list[dict[int, float]] = []
         for s in sparse:

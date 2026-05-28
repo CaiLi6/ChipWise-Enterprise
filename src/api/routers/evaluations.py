@@ -20,8 +20,10 @@ import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from src.api.middleware.auth import require_role
 
 from src.evaluation import aggregator
 from src.evaluation.batch_runner import run_batch_from_traces, run_batch_on_golden
@@ -35,7 +37,11 @@ from src.evaluation.storage import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/evaluations", tags=["evaluations"])
+router = APIRouter(
+    prefix="/api/v1/evaluations",
+    tags=["evaluations"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 def _load_recent(limit: int = 20000, **filters: Any) -> list[dict[str, Any]]:

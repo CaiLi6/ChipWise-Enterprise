@@ -17,11 +17,17 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from src.api.middleware.auth import require_role
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/traces", tags=["traces"])
+router = APIRouter(
+    prefix="/api/v1/traces",
+    tags=["traces"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 TRACE_FILE = Path("logs/traces.jsonl")
 MAX_SCAN_LINES = 5000
