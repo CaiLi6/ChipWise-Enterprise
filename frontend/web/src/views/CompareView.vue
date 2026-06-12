@@ -1,25 +1,29 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { Close, Document, Download, MagicStick, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { compareChips, listChips } from '@/api/compare'
-import type { ChipListItem, CompareCellValue, CompareResult } from '@/types/api'
+import type { CompareCellValue } from '@/types/api'
+import { useCompareStore } from '@/stores/compare'
 import CitationCard from '@/components/CitationCard.vue'
 
-// ── State ────────────────────────────────────────────────────────────
-const allChips = ref<ChipListItem[]>([])
-const searchKeyword = ref('')
-const searching = ref(false)
-const selectedChips = ref<string[]>([])
-const result = ref<CompareResult | null>(null)
-const loading = ref(false)
-const highlightDiff = ref(true)
-const groupByCategory = ref(true)
+// ── State (hoisted to Pinia so it survives navigation) ───────────────
+const store = useCompareStore()
+const {
+  allChips,
+  searchKeyword,
+  searching,
+  selectedChips,
+  result,
+  loading,
+  highlightDiff,
+  groupByCategory,
+  dimensionFilter,
+} = storeToRefs(store)
 
 // Optional category filter sent to backend (drives `dimensions`).
-const dimensionFilter = ref<string[]>([])
 const KNOWN_CATEGORIES = [
   { value: 'electrical', label: '电气' },
   { value: 'timing', label: '时序' },
@@ -30,14 +34,10 @@ const KNOWN_CATEGORIES = [
 
 // ── Chip search (remote) ─────────────────────────────────────────────
 async function loadChips(q?: string) {
-  searching.value = true
   try {
-    const resp = await listChips(q, 50)
-    allChips.value = resp.chips
+    await store.loadChips(q)
   } catch (e: any) {
     ElMessage.error(`加载芯片列表失败：${e?.message || e}`)
-  } finally {
-    searching.value = false
   }
 }
 
@@ -47,7 +47,10 @@ function handleRemoteSearch(query: string) {
   else loadChips()
 }
 
-onMounted(() => loadChips())
+onMounted(() => {
+  // Only fetch the chip list the first time; preserve any previous selection.
+  if (allChips.value.length === 0) loadChips()
+})
 
 // ── Compare action ───────────────────────────────────────────────────
 async function handleCompare() {
@@ -55,29 +58,15 @@ async function handleCompare() {
     ElMessage.warning('至少选择 2 款芯片')
     return
   }
-  loading.value = true
   try {
-    result.value = await compareChips({
-      chip_names: [...selectedChips.value],
-      dimensions: dimensionFilter.value.length ? [...dimensionFilter.value] : undefined,
-    })
+    await store.runCompare()
   } catch (e: any) {
     ElMessage.error(`对比失败：${e?.response?.data?.detail || e?.message || e}`)
-  } finally {
-    loading.value = false
   }
 }
 
 function removeChip(chip: string) {
-  selectedChips.value = selectedChips.value.filter((c) => c !== chip)
-  if (!result.value) return
-  result.value.chips = result.value.chips.filter((c) => c !== chip)
-  for (const k of Object.keys(result.value.comparison_table)) {
-    delete result.value.comparison_table[k][chip]
-  }
-  if (result.value.chips.length < 2) {
-    result.value = null
-  }
+  store.removeChip(chip)
 }
 
 // ── Table data ───────────────────────────────────────────────────────
@@ -346,6 +335,9 @@ function exportMarkdown() {
   padding: 28px 32px;
   max-width: 1280px;
   margin: 0 auto;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 .page-header {
   display: flex;

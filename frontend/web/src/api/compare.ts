@@ -13,6 +13,12 @@ export async function listChips(q?: string, limit = 50): Promise<ChipListRespons
 }
 
 export async function compareChips(data: CompareRequest): Promise<CompareResult> {
-  const resp = await api.post<CompareResult>('/api/v1/compare', data)
+  // The compare endpoint runs a synchronous LLM analysis (35B model) that can
+  // take 40-180s for chips with many parameters — well beyond the global 60s
+  // axios timeout. Override the timeout for this request only so the result is
+  // not aborted mid-flight (which surfaced to users as "no result").
+  const resp = await api.post<CompareResult>('/api/v1/compare', data, {
+    timeout: 240000,
+  })
   return resp.data
 }

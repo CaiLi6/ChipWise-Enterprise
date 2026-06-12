@@ -1,15 +1,15 @@
 # ChipWise Enterprise — 芯片数据智能检索与分析平台
 
-## Architecture Design Specification v5.8
+## Architecture Design Specification v5.8.1
 
 | 属性 | 值 |
 |------|-----|
 | **文档编号** | CW-ARCH-2026-001 |
-| **版本** | 5.8.0 |
+| **版本** | 5.8.1 |
 | **状态** | Approved |
 | **作者** | Enterprise AI Architecture Team |
 | **审批** | CTO Office |
-| **生效日期** | 2026-04-24 |
+| **生效日期** | 2026-04-29 |
 | **密级** | 内部公开 (Internal) |
 
 ---
@@ -30,6 +30,7 @@
 | 5.5 | 2026-04-14 | **工程化全量加固 (Phase 11)**: Backend test CI + 覆盖率门禁 (78%); pre-commit hooks; Prometheus alert rules + 3 Grafana dashboards; 安全扫描基线 (Bandit/pip-audit/npm-audit); 主应用 Dockerfile + docker-compose.prod.yml; docs/ARCHITECTURE.md + CONTRIBUTING.md + PR/issue 模板; Playwright E2E 14 specs; SBOM + 许可证审计; 测试 seed data + Locust ramp profiles; Gradio deprecated | Enterprise AI Architecture Team |
 | 5.6 | 2026-04-22 | **评估系统 + 端到端 RAG 修复 + 前端 UX 加固 (Phase 12)**: 8 指标 RAG 评估闭环 (faithfulness / answer_relevancy / context_precision / context_recall / citation_coverage / latency_score / citation_diversity / agent_efficiency)，qwen3-1.7b LLM-as-judge + 10% 在线采样 + `/api/v1/evaluations/*` + Vue3 `/evaluations` 8 标签页仪表板 + 黄金集 batch run；BM25 稀疏检索可插拔（`retrieval.sparse_method: bgem3\|bm25`，Milvus 2.5 Function 自动生成 `bm25_vector`）；Agent System Prompt 升级为分层回答模板 (结论 / 关键参数 / 对比 / 来源 + GFM 表 + LaTeX)；SSE 流式按字符分块保留换行以驱动前端 Markdown 渲染；前端接入 `marked` + `DOMPurify` + `KaTeX` 并重绘引用为紧凑芯片式 chip (tooltip 显预览 + 三档色点)；LM Studio context=40960 稳定 1.7B 评判；修复 `query.py` `.split()` 吞换行、auth 由内存迁至 PostgreSQL | Enterprise AI Architecture Team |
 | 5.7 | 2026-04-22 | **幻觉抑制 — 数字对齐校验 + 拒答机制 (Phase 12.1)**: `src/evaluation/grounding.py` 正则提取回答中所有 `<数值 单位>` 事实（MHz/GT/s/Gbps/V/W/°C/lane `x8` 等 30+ 单位族 + 中英文别名），与检索 chunk 建立归一化索引逐一比对（1% 相对容差）；同时引入**检索质量闸**：引用 <2 条 / top-1 rerank <0.35 / 均分 <0.25 / 未命中数值占比 >40% 四条规则任一触发即**整段替换为拒答模板**（"暂无法给出可靠答案" + 原因 + 改写建议）；部分未命中降级为 `> ⚠️ 未在引用材料中找到数值` banner 附于原答案上方；所有阈值通过 `settings.yaml::grounding.*` 热配置，`enabled: false` 可整体关闭；失败自动 bypass 不阻塞；延迟 <1 ms；17 个单测覆盖单位别名 / 容差 / 拒答路径 / 注解路径 | Enterprise AI Architecture Team |
+| 5.8.1 | 2026-04-29 | **前端微调 (DocumentsView 布局修复)**: `/documents` 页根容器原为 `height: 100vh + padding: 24px`，默认 `box-sizing: content-box` 导致外盒高度变成 `100vh + 48px`，外层 `AppLayout .content { overflow: hidden }` 把溢出底部裁掉，致使分页器 (1/2/3...) 在 100% 缩放下不可见、必须缩到 90% 才能点击；改为 `flex column + box-sizing: border-box + height: 100%`，表格区 `flex: 1; min-height: 0; overflow: auto` 自滚，分页器 `.documents-footer { flex-shrink: 0 }` 永远贴底可见 | Enterprise AI Architecture Team |
 | 5.8 | 2026-04-24 | **持续优化 + 用户体验闭环 (Phase 12.2-12.5)**: (1) **GraphRAG ingestion 闭环** — `extract_chip_relations` schema-driven 实体/关系抽取 + Kùzu 同步随上传自动触发，反查与共提及链路打通 (`rag_search` co-mention reverse-expansion)；(2) **Agent 预算再扩** — `max_total_tokens 40960 → 131072` + 新增 `max_observation_chars: 4000` 在 ReAct 迭代间截断 RAG observation，避免长上下文中途吃光预算；(3) **Grounding warn 模式** — 新增 `numeric_abstain_mode: "warn" \| "hard"` (默认 warn)，定义/对比类回答不再因少量未验证数字被整段拒答，仅顶部 banner 提示；同时修复 raw 提取使用 `m.group(0)` 防止偏移错位产生乱码 (`**: 1.`)；(4) **Privacy 命名空间** — 会话历史改为 `chipwise_sessions_v1::<username>` 桶 + `watch(auth.username)` 切换重载 + 旧 key 自动迁移，杜绝同浏览器多账号串数据；(5) **Auth 体验** — `access_token` 30min → 8h、`refresh_token` 7d → 30d；前端解析 JWT `exp` 在到期前 60s 主动 refresh + 并发合并；SSE `/query/stream` 走 fetch 单独处理 401 透明 refresh + 重试 1 次，长回答中途过期不再丢答案；(6) **Compare 页重构** — 接入真实 `/api/v1/chips`、LLM 综合分析 + 引用 + 分组 + Markdown 导出；(7) **CI/CD 完整化** — `.github/workflows/release.yml` 矩阵构建 api/celery/web → GHCR + `deploy.yml` self-hosted runner manual dispatch + `scripts/deploy.sh` 单机滚动部署 + `/readiness` 烟测；(8) **登录/注册 UI 大改版** — 对标 Linear×Vercel 左右分屏 (深色渐变 brand + 动态发光球体 + 网格遮罩 + 极简白底原生表单 + 黑色主按钮 + SSO 三列)，响应式 980px 塌陷 | Enterprise AI Architecture Team |
 
 ---

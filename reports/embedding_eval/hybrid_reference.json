@@ -1,0 +1,124 @@
+{
+  "model": "bge-m3-hybrid",
+  "config": {
+    "fusion": "RRF",
+    "rrf_k": 60,
+    "dense_pool": 100,
+    "top_k": 20
+  },
+  "metrics": {
+    "aggregate": {
+      "recall@1": {
+        "mean": 0.4944,
+        "ci_low": 0.4148,
+        "ci_high": 0.5769,
+        "n": 90
+      },
+      "hit@1": {
+        "mean": 0.7444,
+        "ci_low": 0.6556,
+        "ci_high": 0.8333,
+        "n": 90
+      },
+      "ndcg@1": {
+        "mean": 0.6704,
+        "ci_low": 0.5815,
+        "ci_high": 0.7593,
+        "n": 90
+      },
+      "recall@5": {
+        "mean": 0.7689,
+        "ci_low": 0.6909,
+        "ci_high": 0.8411,
+        "n": 90
+      },
+      "hit@5": {
+        "mean": 0.8778,
+        "ci_low": 0.8111,
+        "ci_high": 0.9444,
+        "n": 90
+      },
+      "ndcg@5": {
+        "mean": 0.7125,
+        "ci_low": 0.6317,
+        "ci_high": 0.7876,
+        "n": 90
+      },
+      "recall@10": {
+        "mean": 0.8683,
+        "ci_low": 0.8059,
+        "ci_high": 0.925,
+        "n": 90
+      },
+      "hit@10": {
+        "mean": 0.9333,
+        "ci_low": 0.8778,
+        "ci_high": 0.9778,
+        "n": 90
+      },
+      "ndcg@10": {
+        "mean": 0.7535,
+        "ci_low": 0.6848,
+        "ci_high": 0.8182,
+        "n": 90
+      },
+      "recall@20": {
+        "mean": 0.9154,
+        "ci_low": 0.8602,
+        "ci_high": 0.9617,
+        "n": 90
+      },
+      "hit@20": {
+        "mean": 0.9444,
+        "ci_low": 0.8889,
+        "ci_high": 0.9889,
+        "n": 90
+      },
+      "ndcg@20": {
+        "mean": 0.7684,
+        "ci_low": 0.7024,
+        "ci_high": 0.829,
+        "n": 90
+      },
+      "mrr@10": {
+        "mean": 0.7947,
+        "ci_low": 0.721,
+        "ci_high": 0.8631,
+        "n": 90
+      },
+      "map@10": {
+        "mean": 0.7218,
+        "ci_low": 0.6478,
+        "ci_high": 0.7949,
+        "n": 90
+      }
+    },
+    "by_category_ndcg10": {
+      "errata_limit": {
+        "mean": 1.0,
+        "n": 2
+      },
+      "feature_availability": {
+        "mean": 1.0,
+        "n": 1
+      },
+      "general": {
+        "mean": 0.6556,
+        "n": 16
+      },
+      "numeric": {
+        "mean": 0.8012,
+        "n": 33
+      },
+      "package_pinout": {
+        "mean": 0.7775,
+        "n": 10
+      },
+      "table_lookup": {
+        "mean": 0.7184,
+        "n": 28
+      }
+    }
+  },
+  "n_queries": 90
+}

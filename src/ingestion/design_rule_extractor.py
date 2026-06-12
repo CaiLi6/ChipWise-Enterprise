@@ -22,37 +22,63 @@ _RULE_KEYWORDS = re.compile(
 async def extract_design_rules(
     chunks: list[Chunk], chip_id: int, llm: BaseLLM
 ) -> list[dict[str, Any]]:
-    """Extract design rules from relevant chunks using LLM."""
-    # Filter chunks that contain rule-related keywords
+    """Extract design rules from relevant chunks using LLM, batched.
+
+    Sends up to MAX_CHUNKS chunks to the LLM in batches of BATCH_SIZE so a
+    single PDF needs only ceil(MAX_CHUNKS / BATCH_SIZE) LLM round-trips
+    instead of one per chunk.
+    """
     relevant = [c for c in chunks if _RULE_KEYWORDS.search(c.content)]
     if not relevant:
         return []
 
-    rules: list[dict[str, Any]] = []
-    for chunk in relevant[:10]:  # Limit to 10 chunks
-        try:
-            prompt = (
-                "Extract design rules from this text. Return a JSON array:\n"
-                '[{"rule_type": "decoupling_cap|layout|thermal|power_seq|clock|esd|io_config", '
-                '"rule_text": "...", "severity": "mandatory|recommendation|note"}]\n\n'
-                f"Text:\n{chunk.content[:2000]}"
-            )
-            raw = await llm.generate(prompt, temperature=0, max_tokens=500)
+    MAX_CHUNKS = 10
+    BATCH_SIZE = 5
+    relevant = relevant[:MAX_CHUNKS]
 
-            # Parse JSON
-            code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", str(raw), re.DOTALL)
-            text = code_block.group(1) if code_block else str(raw)
-            try:
-                parsed = json.loads(text.strip())
-                if isinstance(parsed, list):
-                    for r in parsed:
-                        r["chip_id"] = chip_id
-                        r["source_page"] = chunk.page_number
-                        r["source_section"] = chunk.metadata.get("section_title", "")
-                    rules.extend(parsed)
-            except json.JSONDecodeError:
-                pass
+    rules: list[dict[str, Any]] = []
+    for batch_start in range(0, len(relevant), BATCH_SIZE):
+        batch = relevant[batch_start : batch_start + BATCH_SIZE]
+        prompt_body = "\n\n".join(
+            f"[#{idx} page={c.page_number}]\n{c.content[:1800]}"
+            for idx, c in enumerate(batch)
+        )
+        prompt = (
+            "Extract design rules from the labeled chunks below. Each rule "
+            "MUST include `chunk_index` referring to the chunk it came from. "
+            "Return ONLY a JSON array (no prose):\n"
+            '[{"chunk_index": int, '
+            '"rule_type": "decoupling_cap|layout|thermal|power_seq|clock|esd|io_config", '
+            '"rule_text": "...", '
+            '"severity": "mandatory|recommendation|note"}]\n\n'
+            f"Chunks:\n{prompt_body}"
+        )
+        try:
+            response = await llm.generate(prompt, temperature=0, max_tokens=1500)
+            raw = response.text if hasattr(response, "text") else str(response)
         except Exception:
-            logger.debug("Rule extraction failed for chunk %s", chunk.chunk_id)
+            logger.debug("Rule extraction LLM call failed", exc_info=True)
+            continue
+
+        code_block = re.search(r"```(?:json)?\s*\n?(.*?)```", raw, re.DOTALL)
+        text = code_block.group(1) if code_block else raw
+        arr = re.search(r"\[.*\]", text, re.DOTALL)
+        if not arr:
+            continue
+        try:
+            parsed = json.loads(arr.group(0))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, list):
+            continue
+        for r in parsed:
+            if not isinstance(r, dict):
+                continue
+            idx = r.get("chunk_index")
+            src = batch[idx] if isinstance(idx, int) and 0 <= idx < len(batch) else batch[0]
+            r["chip_id"] = chip_id
+            r["source_page"] = src.page_number
+            r["source_section"] = src.metadata.get("section_title", "")
+            rules.append(r)
 
     return rules

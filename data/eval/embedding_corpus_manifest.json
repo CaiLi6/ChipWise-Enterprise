@@ -1,0 +1,297 @@
+[
+  {
+    "doc_id": "0432055r04",
+    "file": "data/documents/unknown/0432055r04.pdf",
+    "chunks": 53
+  },
+  {
+    "doc_id": "16gb_ddr4_sdram",
+    "file": "data/documents/unknown/16gb_ddr4_sdram.pdf",
+    "chunks": 295
+  },
+  {
+    "doc_id": "6_MDL_SL_MDL_L",
+    "file": "data/documents/unknown/6_可调焦_MDL-SL_MDL-L系列.pdf",
+    "chunks": 3
+  },
+  {
+    "doc_id": "7_series_product_selection_guide",
+    "file": "data/documents/unknown/7-series-product-selection-guide.pdf",
+    "chunks": 26
+  },
+  {
+    "doc_id": "A6021_imageperformance_v1_mech_mind",
+    "file": "data/documents/unknown/A6021_imageperformance_v1_mech-mind.pdf",
+    "chunks": 13
+  },
+  {
+    "doc_id": "DS07001_Titan3_FPGA_V0_5",
+    "file": "data/documents/unknown/DS07001_Titan3系列FPGA器件数据手册_V0.5.pdf",
+    "chunks": 124
+  },
+  {
+    "doc_id": "DS10001_Kosmo2_SOPC_V0_4",
+    "file": "data/documents/unknown/DS10001_Kosmo2系列SOPC器件数据手册_V0.4.pdf",
+    "chunks": 151
+  },
+  {
+    "doc_id": "DS1101_PH2A_FamilyOverview",
+    "file": "data/documents/unknown/DS1101_PH2A_FamilyOverview--梅卡曼德.pdf",
+    "chunks": 12
+  },
+  {
+    "doc_id": "Flash2K_Datasheet_v1_4",
+    "file": "data/documents/unknown/Flash2K_Datasheet_v1.4.pdf",
+    "chunks": 70
+  },
+  {
+    "doc_id": "Flash2K_UserManual_v1_7_1",
+    "file": "data/documents/unknown/Flash2K_UserManual_v1.7(1).pdf",
+    "chunks": 117
+  },
+  {
+    "doc_id": "Flash4K_Datasheet_20181126",
+    "file": "data/documents/unknown/Flash4K_Datasheet_20181126.pdf",
+    "chunks": 105
+  },
+  {
+    "doc_id": "GMAX3412_Pre_Datasheet_V0_2_0_20231018",
+    "file": "data/documents/unknown/GMAX3412_Pre_Datasheet_V0.2.0_20231018.pdf",
+    "chunks": 110
+  },
+  {
+    "doc_id": "GSENSE2020_APP_NOTE_GS_DDS_Operation_Mode_v2_0_2",
+    "file": "data/documents/unknown/GSENSE2020 APP NOTE_GS DDS Operation Mode v2.0.2_2023-04-10.pdf",
+    "chunks": 68
+  },
+  {
+    "doc_id": "GSPRINT6502_FPGA_Driver_Code_User_Guide_V1_0",
+    "file": "data/documents/unknown/GSPRINT6502 FPGA Driver Code User Guide_V1.0.pdf",
+    "chunks": 29
+  },
+  {
+    "doc_id": "GSPRINT6502BSI_Pre_Datasheet_V0_3_4_20250609",
+    "file": "data/documents/unknown/GSPRINT6502BSI_Pre_Datasheet_V0.3.4_20250609.pdf",
+    "chunks": 89
+  },
+  {
+    "doc_id": "HL40161MG_163MG_TDS_Rev2",
+    "file": "data/documents/unknown/HL40161MG_163MG-TDS-Rev2.pdf",
+    "chunks": 17
+  },
+  {
+    "doc_id": "IMX226CLJ_C_E_Data_Sheet_E17603A21",
+    "file": "data/documents/unknown/IMX226CLJ-C(E)Data_Sheet_E17603A21.pdf",
+    "chunks": 116
+  },
+  {
+    "doc_id": "IMX421LLJ_C_Data_Sheet_E_E18613D18",
+    "file": "data/documents/unknown/IMX421LLJ-C_Data_Sheet(E)_E18613D18.pdf",
+    "chunks": 158
+  },
+  {
+    "doc_id": "IMX900_AQR_C_AMR_C_DataSheet_E_E24604B51",
+    "file": "data/documents/unknown/IMX900-AQR-C_AMR-C-DataSheet(E)_E24604B51.pdf",
+    "chunks": 154
+  },
+  {
+    "doc_id": "Jetson_Orin_NX_Nano_Series_Modules_Tuning_Compli",
+    "file": "data/documents/unknown/Jetson-Orin-NX-Nano-Series-Modules-Tuning-Compliance-Guide_DA-11267-001v1.2.pdf",
+    "chunks": 111
+  },
+  {
+    "doc_id": "LD_240531v1",
+    "file": "data/documents/unknown/LD故障模式（中文）240531v1.pdf",
+    "chunks": 9
+  },
+  {
+    "doc_id": "LUX19HS_datasheet_V2_3",
+    "file": "data/documents/unknown/LUX19HS_datasheet_V2.3.pdf",
+    "chunks": 81
+  },
+  {
+    "doc_id": "P2597_C02_Concept_schematics",
+    "file": "data/documents/unknown/P2597_C02_Concept_schematics.pdf",
+    "chunks": 323
+  },
+  {
+    "doc_id": "P3509_A01_Concept_schematics",
+    "file": "data/documents/unknown/P3509_A01_Concept_schematics.pdf",
+    "chunks": 210
+  },
+  {
+    "doc_id": "P3509_A01_PCB_stackup",
+    "file": "data/documents/unknown/P3509_A01_PCB_stackup.pdf",
+    "chunks": 6
+  },
+  {
+    "doc_id": "P3737_A05_OrCAD_schematics_base_version",
+    "file": "data/documents/unknown/P3737_A05_OrCAD_schematics(base_version).pdf",
+    "chunks": 314
+  },
+  {
+    "doc_id": "P3768_A04_PCB_stackup",
+    "file": "data/documents/unknown/P3768_A04_PCB_stackup.pdf",
+    "chunks": 6
+  },
+  {
+    "doc_id": "RTL8226B_8221B_I_8221B_I_VB_VM_Reference_schemat",
+    "file": "data/documents/unknown/RTL8226B_8221B(I)_8221B(I)_VB_VM_Reference_schematic_V111.pdf",
+    "chunks": 19
+  },
+  {
+    "doc_id": "Rockchip_RK3562J_Datasheet_V2_0_20241104",
+    "file": "data/documents/unknown/Rockchip RK3562J Datasheet-V2.0-20241104.pdf",
+    "chunks": 105
+  },
+  {
+    "doc_id": "Rockchip_RK860_Datasheet_V1_6_20221117",
+    "file": "data/documents/unknown/Rockchip RK860 Datasheet V1.6-20221117.pdf",
+    "chunks": 55
+  },
+  {
+    "doc_id": "Rockchip_RK3588_EVB1_User_Guide_V1_2_20240301_CN",
+    "file": "data/documents/unknown/Rockchip_RK3588_EVB1_User_Guide_V1.2_20240301_CN.pdf",
+    "chunks": 54
+  },
+  {
+    "doc_id": "Rockchip_RK3588_EVB7_User_Guide_V1_0_20230620_CN",
+    "file": "data/documents/unknown/Rockchip_RK3588_EVB7_User_Guide_V1.0_20230620_CN.pdf",
+    "chunks": 56
+  },
+  {
+    "doc_id": "Rockchip_RK3588_NVR_User_Guide_V1_0_CN_20220421",
+    "file": "data/documents/unknown/Rockchip_RK3588_NVR_User_Guide_V1.0_CN_20220421.pdf",
+    "chunks": 39
+  },
+  {
+    "doc_id": "Rockchip_Support_List_DDR_Ver2_64",
+    "file": "data/documents/unknown/Rockchip_Support_List_DDR_Ver2.64.pdf",
+    "chunks": 106
+  },
+  {
+    "doc_id": "STEP_MXO2",
+    "file": "data/documents/unknown/STEP-MXO2 快速入门.pdf",
+    "chunks": 42
+  },
+  {
+    "doc_id": "STEP_MXO2_V1_2",
+    "file": "data/documents/unknown/STEP-MXO2 软件手册V1.2.pdf",
+    "chunks": 15
+  },
+  {
+    "doc_id": "STEP_MXO2V2_2",
+    "file": "data/documents/unknown/STEP-MXO2V2.2原理图.pdf",
+    "chunks": 28
+  },
+  {
+    "doc_id": "TJ375_TJ135_1209user",
+    "file": "data/documents/unknown/TJ375-TJ135新产品介绍1209user.pdf",
+    "chunks": 19
+  },
+  {
+    "doc_id": "UIE_DS_HL65263MG",
+    "file": "data/documents/unknown/UIE_DS_HL65263MG.pdf",
+    "chunks": 9
+  },
+  {
+    "doc_id": "Xilinx_Kintex_UltraScale_FPGA_KCU105",
+    "file": "data/documents/unknown/Xilinx Kintex UltraScale FPGA KCU105.pdf",
+    "chunks": 255
+  },
+  {
+    "doc_id": "cost_optimized_product_selection_guide",
+    "file": "data/documents/unknown/cost-optimized-product-selection-guide.pdf",
+    "chunks": 34
+  },
+  {
+    "doc_id": "ds890_ultrascale_overview",
+    "file": "data/documents/unknown/ds890-ultrascale-overview.pdf",
+    "chunks": 136
+  },
+  {
+    "doc_id": "ds941_zynq_ultra_ps_e_vip",
+    "file": "data/documents/unknown/ds941-zynq-ultra-ps-e-vip.pdf",
+    "chunks": 46
+  },
+  {
+    "doc_id": "fpga_tn_02028_2_3_sub_lvds_signaling_using_latti",
+    "file": "data/documents/unknown/fpga-tn-02028-2-3-sub-lvds-signaling-using-lattice-devices.pdf",
+    "chunks": 34
+  },
+  {
+    "doc_id": "fpga_tn_02044_4_5_thermal_management",
+    "file": "data/documents/unknown/fpga-tn-02044-4-5-thermal-management.pdf",
+    "chunks": 97
+  },
+  {
+    "doc_id": "fpga_tn_02298_0_82_avant_sysclock_pll_design_use",
+    "file": "data/documents/unknown/fpga-tn-02298-0-82-avant-sysclock-pll-design-user-guide.pdf",
+    "chunks": 169
+  },
+  {
+    "doc_id": "gpixel_socket",
+    "file": "data/documents/unknown/gpixel socket.pdf",
+    "chunks": 5
+  },
+  {
+    "doc_id": "ina4230",
+    "file": "data/documents/unknown/ina4230.pdf",
+    "chunks": 82
+  },
+  {
+    "doc_id": "pg150_ultrascale_mis",
+    "file": "data/documents/unknown/pg150-ultrascale-mis.pdf",
+    "chunks": 149
+  },
+  {
+    "doc_id": "pk856_ultrascale_plus_sfvb784_sfvc784",
+    "file": "data/documents/unknown/pk856-ultrascale-plus-sfvb784-sfvc784.pdf",
+    "chunks": 3
+  },
+  {
+    "doc_id": "ug1099_bga_device_design_rules",
+    "file": "data/documents/unknown/ug1099-bga-device-design-rules.pdf",
+    "chunks": 77
+  },
+  {
+    "doc_id": "ug580_ultrascale_sysmon",
+    "file": "data/documents/unknown/ug580-ultrascale-sysmon.pdf",
+    "chunks": 131
+  },
+  {
+    "doc_id": "ultrascale_plus_fpga_product_selection_guide",
+    "file": "data/documents/unknown/ultrascale-plus-fpga-product-selection-guide.pdf",
+    "chunks": 20
+  },
+  {
+    "doc_id": "versal_prime_product_selection_guide",
+    "file": "data/documents/unknown/versal-prime-product-selection-guide.pdf",
+    "chunks": 15
+  },
+  {
+    "doc_id": "xapp1348_power_analysis_seven_steps",
+    "file": "data/documents/unknown/xapp1348-power-analysis-seven steps.pdf",
+    "chunks": 49
+  },
+  {
+    "doc_id": "GSPRINT4510_BM_sensor_PLL_issue",
+    "file": "data/documents/unknown/梅卡GSPRINT4510-BM sensor PLL issue.pdf",
+    "chunks": 2
+  },
+  {
+    "doc_id": "NST112x_CWLR_Datasheet_Rev_2_1_EN",
+    "file": "data/documents/unknown/温度传感器 NST112x-CWLR_Datasheet_Rev_2.1_EN.pdf",
+    "chunks": 73
+  },
+  {
+    "doc_id": "EL405_60LY_250704",
+    "file": "data/documents/unknown/精英EL405-60LY-250704.pdf",
+    "chunks": 3
+  },
+  {
+    "doc_id": "selector_guide_v2_0",
+    "file": "data/documents/unknown/钛金-selector-guide-v2.0.pdf",
+    "chunks": 13
+  }
+]

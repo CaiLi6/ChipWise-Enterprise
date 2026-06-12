@@ -1,0 +1,877 @@
+{
+  "models": [
+    "bge-m3",
+    "bge-large-zh",
+    "jina-v3",
+    "qwen3-0.6b",
+    "e5-large"
+  ],
+  "n_queries": 90,
+  "n_verified": 90,
+  "n_corpus": 1000,
+  "top_k": 50,
+  "threads": 16,
+  "results": {
+    "bge-m3": {
+      "meta": {
+        "hf_id": "BAAI/bge-m3",
+        "dim": 1024,
+        "max_len": 512,
+        "device": "cpu",
+        "dtype": "float32",
+        "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+        "threads": 16,
+        "normalize": true,
+        "query_prefix": "",
+        "passage_prefix": "",
+        "query_encode_kwargs": {},
+        "passage_encode_kwargs": {},
+        "notes": "Production baseline (dense path). No query/passage prefix."
+      },
+      "fairness": {
+        "n_corpus": 1000,
+        "n_queries": 90,
+        "corpus_truncation_rate": 0.103,
+        "query_truncation_rate": 0.0,
+        "corpus_nan_or_zero": 0,
+        "query_nan_or_zero": 0,
+        "load_peak_rss_mb": 1445.9
+      },
+      "speed": {
+        "query_latency_p50_ms": 152.76,
+        "query_latency_p95_ms": 225.2,
+        "query_latency_mean_ms": 157.23,
+        "throughput_texts_per_sec": {
+          "1": 6.4,
+          "32": 2.2
+        },
+        "corpus_encode_sec": 445.92,
+        "corpus_texts_per_sec": 2.2
+      },
+      "memory": {
+        "baseline_rss_mb": 31.8,
+        "post_load_rss_mb": 785.4,
+        "load_delta_mb": 753.6,
+        "peak_encode_rss_mb": 3116.5,
+        "pss_mb": 2532.81640625,
+        "ru_maxrss_mb": 3116.8,
+        "gpu_peak_mb": null,
+        "disk_weight_mb": 2165.9
+      },
+      "metrics": {
+        "aggregate": {
+          "recall@1": {
+            "mean": 0.4106,
+            "ci_low": 0.3322,
+            "ci_high": 0.4911,
+            "n": 90
+          },
+          "hit@1": {
+            "mean": 0.6556,
+            "ci_low": 0.5556,
+            "ci_high": 0.7444,
+            "n": 90
+          },
+          "ndcg@1": {
+            "mean": 0.6111,
+            "ci_low": 0.5111,
+            "ci_high": 0.7037,
+            "n": 90
+          },
+          "recall@5": {
+            "mean": 0.8246,
+            "ci_low": 0.7548,
+            "ci_high": 0.8876,
+            "n": 90
+          },
+          "hit@5": {
+            "mean": 0.9,
+            "ci_low": 0.8333,
+            "ci_high": 0.9556,
+            "n": 90
+          },
+          "ndcg@5": {
+            "mean": 0.7236,
+            "ci_low": 0.6491,
+            "ci_high": 0.792,
+            "n": 90
+          },
+          "recall@10": {
+            "mean": 0.8487,
+            "ci_low": 0.7826,
+            "ci_high": 0.9083,
+            "n": 90
+          },
+          "hit@10": {
+            "mean": 0.9111,
+            "ci_low": 0.8444,
+            "ci_high": 0.9667,
+            "n": 90
+          },
+          "ndcg@10": {
+            "mean": 0.731,
+            "ci_low": 0.6587,
+            "ci_high": 0.7978,
+            "n": 90
+          },
+          "recall@20": {
+            "mean": 0.8931,
+            "ci_low": 0.833,
+            "ci_high": 0.9435,
+            "n": 90
+          },
+          "hit@20": {
+            "mean": 0.9333,
+            "ci_low": 0.8778,
+            "ci_high": 0.9778,
+            "n": 90
+          },
+          "ndcg@20": {
+            "mean": 0.7464,
+            "ci_low": 0.6792,
+            "ci_high": 0.8076,
+            "n": 90
+          },
+          "mrr@10": {
+            "mean": 0.7533,
+            "ci_low": 0.6774,
+            "ci_high": 0.8239,
+            "n": 90
+          },
+          "map@10": {
+            "mean": 0.701,
+            "ci_low": 0.6265,
+            "ci_high": 0.77,
+            "n": 90
+          }
+        },
+        "by_category_ndcg10": {
+          "errata_limit": {
+            "mean": 1.0,
+            "n": 2
+          },
+          "feature_availability": {
+            "mean": 1.0,
+            "n": 1
+          },
+          "general": {
+            "mean": 0.8082,
+            "n": 16
+          },
+          "numeric": {
+            "mean": 0.7223,
+            "n": 33
+          },
+          "package_pinout": {
+            "mean": 0.7615,
+            "n": 10
+          },
+          "table_lookup": {
+            "mean": 0.6574,
+            "n": 28
+          }
+        },
+        "by_lang_ndcg10": {
+          "en": {
+            "mean": 0.693,
+            "n": 44
+          },
+          "zh": {
+            "mean": 0.7673,
+            "n": 46
+          }
+        }
+      }
+    },
+    "bge-large-zh": {
+      "meta": {
+        "hf_id": "BAAI/bge-large-zh-v1.5",
+        "dim": 1024,
+        "max_len": 512,
+        "device": "cpu",
+        "dtype": "float32",
+        "revision": "79e7739b6ab944e86d6171e44d24c997fc1e0116",
+        "threads": 16,
+        "normalize": true,
+        "query_prefix": "为这个句子生成表示以用于检索相关文章：",
+        "passage_prefix": "",
+        "query_encode_kwargs": {},
+        "passage_encode_kwargs": {},
+        "notes": "Chinese retrieval instruction on the query side only."
+      },
+      "fairness": {
+        "n_corpus": 1000,
+        "n_queries": 90,
+        "corpus_truncation_rate": 0.165,
+        "query_truncation_rate": 0.0,
+        "corpus_nan_or_zero": 0,
+        "query_nan_or_zero": 0,
+        "load_peak_rss_mb": 556.3
+      },
+      "speed": {
+        "query_latency_p50_ms": 176.73,
+        "query_latency_p95_ms": 238.54,
+        "query_latency_mean_ms": 174.65,
+        "throughput_texts_per_sec": {
+          "1": 5.7,
+          "32": 2.1
+        },
+        "corpus_encode_sec": 481.73,
+        "corpus_texts_per_sec": 2.1
+      },
+      "memory": {
+        "baseline_rss_mb": 31.8,
+        "post_load_rss_mb": 504.0,
+        "load_delta_mb": 472.2,
+        "peak_encode_rss_mb": 2550.3,
+        "pss_mb": 1855.7734375,
+        "ru_maxrss_mb": 2551.5,
+        "gpu_peak_mb": null,
+        "disk_weight_mb": 1241.9
+      },
+      "metrics": {
+        "aggregate": {
+          "recall@1": {
+            "mean": 0.1954,
+            "ci_low": 0.1296,
+            "ci_high": 0.2657,
+            "n": 90
+          },
+          "hit@1": {
+            "mean": 0.3111,
+            "ci_low": 0.2222,
+            "ci_high": 0.4111,
+            "n": 90
+          },
+          "ndcg@1": {
+            "mean": 0.2667,
+            "ci_low": 0.1778,
+            "ci_high": 0.3593,
+            "n": 90
+          },
+          "recall@5": {
+            "mean": 0.3944,
+            "ci_low": 0.3074,
+            "ci_high": 0.4889,
+            "n": 90
+          },
+          "hit@5": {
+            "mean": 0.5111,
+            "ci_low": 0.4111,
+            "ci_high": 0.6111,
+            "n": 90
+          },
+          "ndcg@5": {
+            "mean": 0.348,
+            "ci_low": 0.2667,
+            "ci_high": 0.4362,
+            "n": 90
+          },
+          "recall@10": {
+            "mean": 0.4587,
+            "ci_low": 0.372,
+            "ci_high": 0.55,
+            "n": 90
+          },
+          "hit@10": {
+            "mean": 0.5778,
+            "ci_low": 0.4778,
+            "ci_high": 0.6778,
+            "n": 90
+          },
+          "ndcg@10": {
+            "mean": 0.3702,
+            "ci_low": 0.2919,
+            "ci_high": 0.4589,
+            "n": 90
+          },
+          "recall@20": {
+            "mean": 0.5115,
+            "ci_low": 0.4207,
+            "ci_high": 0.6074,
+            "n": 90
+          },
+          "hit@20": {
+            "mean": 0.6222,
+            "ci_low": 0.5222,
+            "ci_high": 0.7222,
+            "n": 90
+          },
+          "ndcg@20": {
+            "mean": 0.3869,
+            "ci_low": 0.3087,
+            "ci_high": 0.472,
+            "n": 90
+          },
+          "mrr@10": {
+            "mean": 0.4002,
+            "ci_low": 0.3134,
+            "ci_high": 0.4948,
+            "n": 90
+          },
+          "map@10": {
+            "mean": 0.3284,
+            "ci_low": 0.251,
+            "ci_high": 0.4143,
+            "n": 90
+          }
+        },
+        "by_category_ndcg10": {
+          "errata_limit": {
+            "mean": 0.7153,
+            "n": 2
+          },
+          "feature_availability": {
+            "mean": 1.0,
+            "n": 1
+          },
+          "general": {
+            "mean": 0.3643,
+            "n": 16
+          },
+          "numeric": {
+            "mean": 0.3418,
+            "n": 33
+          },
+          "package_pinout": {
+            "mean": 0.5876,
+            "n": 10
+          },
+          "table_lookup": {
+            "mean": 0.2823,
+            "n": 28
+          }
+        },
+        "by_lang_ndcg10": {
+          "en": {
+            "mean": 0.3645,
+            "n": 44
+          },
+          "zh": {
+            "mean": 0.3757,
+            "n": 46
+          }
+        }
+      }
+    },
+    "jina-v3": {
+      "meta": {
+        "hf_id": "jinaai/jina-embeddings-v3",
+        "dim": 1024,
+        "max_len": 512,
+        "device": "cpu",
+        "dtype": "float32",
+        "revision": "ab036b023d30b4d1138c4c3bfa9f0c445ab455d6",
+        "threads": 16,
+        "normalize": true,
+        "query_prefix": "",
+        "passage_prefix": "",
+        "query_encode_kwargs": {
+          "task": "retrieval.query"
+        },
+        "passage_encode_kwargs": {
+          "task": "retrieval.passage"
+        },
+        "notes": "Task-specific LoRA via encode(task=...); needs einops + remote code."
+      },
+      "fairness": {
+        "n_corpus": 1000,
+        "n_queries": 90,
+        "corpus_truncation_rate": 0.103,
+        "query_truncation_rate": 0.0,
+        "corpus_nan_or_zero": 0,
+        "query_nan_or_zero": 0,
+        "load_peak_rss_mb": 3979.9
+      },
+      "speed": {
+        "query_latency_p50_ms": 861.76,
+        "query_latency_p95_ms": 963.93,
+        "query_latency_mean_ms": 860.76,
+        "throughput_texts_per_sec": {
+          "1": 1.2,
+          "32": 1.4
+        },
+        "corpus_encode_sec": 724.85,
+        "corpus_texts_per_sec": 1.4
+      },
+      "memory": {
+        "baseline_rss_mb": 31.8,
+        "post_load_rss_mb": 3248.1,
+        "load_delta_mb": 3216.3,
+        "peak_encode_rss_mb": 5519.4,
+        "pss_mb": 3502.14453125,
+        "ru_maxrss_mb": 5557.5,
+        "gpu_peak_mb": null,
+        "disk_weight_mb": 1091.7
+      },
+      "metrics": {
+        "aggregate": {
+          "recall@1": {
+            "mean": 0.3346,
+            "ci_low": 0.2581,
+            "ci_high": 0.4157,
+            "n": 90
+          },
+          "hit@1": {
+            "mean": 0.5444,
+            "ci_low": 0.4444,
+            "ci_high": 0.6444,
+            "n": 90
+          },
+          "ndcg@1": {
+            "mean": 0.4926,
+            "ci_low": 0.3926,
+            "ci_high": 0.5926,
+            "n": 90
+          },
+          "recall@5": {
+            "mean": 0.6374,
+            "ci_low": 0.5485,
+            "ci_high": 0.7176,
+            "n": 90
+          },
+          "hit@5": {
+            "mean": 0.7778,
+            "ci_low": 0.6889,
+            "ci_high": 0.8556,
+            "n": 90
+          },
+          "ndcg@5": {
+            "mean": 0.564,
+            "ci_low": 0.4852,
+            "ci_high": 0.6409,
+            "n": 90
+          },
+          "recall@10": {
+            "mean": 0.7346,
+            "ci_low": 0.6535,
+            "ci_high": 0.8083,
+            "n": 90
+          },
+          "hit@10": {
+            "mean": 0.8333,
+            "ci_low": 0.7556,
+            "ci_high": 0.9,
+            "n": 90
+          },
+          "ndcg@10": {
+            "mean": 0.6,
+            "ci_low": 0.5233,
+            "ci_high": 0.6725,
+            "n": 90
+          },
+          "recall@20": {
+            "mean": 0.8109,
+            "ci_low": 0.7396,
+            "ci_high": 0.8757,
+            "n": 90
+          },
+          "hit@20": {
+            "mean": 0.9,
+            "ci_low": 0.8333,
+            "ci_high": 0.9556,
+            "n": 90
+          },
+          "ndcg@20": {
+            "mean": 0.6205,
+            "ci_low": 0.5467,
+            "ci_high": 0.6884,
+            "n": 90
+          },
+          "mrr@10": {
+            "mean": 0.6393,
+            "ci_low": 0.5505,
+            "ci_high": 0.727,
+            "n": 90
+          },
+          "map@10": {
+            "mean": 0.5213,
+            "ci_low": 0.4399,
+            "ci_high": 0.5961,
+            "n": 90
+          }
+        },
+        "by_category_ndcg10": {
+          "errata_limit": {
+            "mean": 1.0,
+            "n": 2
+          },
+          "feature_availability": {
+            "mean": 1.0,
+            "n": 1
+          },
+          "general": {
+            "mean": 0.6118,
+            "n": 16
+          },
+          "numeric": {
+            "mean": 0.5336,
+            "n": 33
+          },
+          "package_pinout": {
+            "mean": 0.768,
+            "n": 10
+          },
+          "table_lookup": {
+            "mean": 0.5687,
+            "n": 28
+          }
+        },
+        "by_lang_ndcg10": {
+          "en": {
+            "mean": 0.5748,
+            "n": 44
+          },
+          "zh": {
+            "mean": 0.6242,
+            "n": 46
+          }
+        }
+      }
+    },
+    "qwen3-0.6b": {
+      "meta": {
+        "hf_id": "Qwen/Qwen3-Embedding-0.6B",
+        "dim": 1024,
+        "max_len": 512,
+        "device": "cpu",
+        "dtype": "float32",
+        "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+        "threads": 16,
+        "normalize": true,
+        "query_prefix": "",
+        "passage_prefix": "",
+        "query_encode_kwargs": {
+          "prompt_name": "query"
+        },
+        "passage_encode_kwargs": {},
+        "notes": "Instruct prompt on queries via ST prompt_name='query'; last-token pooling."
+      },
+      "fairness": {
+        "n_corpus": 1000,
+        "n_queries": 90,
+        "corpus_truncation_rate": 0.188,
+        "query_truncation_rate": 0.0,
+        "corpus_nan_or_zero": 0,
+        "query_nan_or_zero": 0,
+        "load_peak_rss_mb": 3796.2
+      },
+      "speed": {
+        "query_latency_p50_ms": 246.98,
+        "query_latency_p95_ms": 394.36,
+        "query_latency_mean_ms": 256.64,
+        "throughput_texts_per_sec": {
+          "1": 3.9,
+          "32": 1.0
+        },
+        "corpus_encode_sec": 976.86,
+        "corpus_texts_per_sec": 1.0
+      },
+      "memory": {
+        "baseline_rss_mb": 31.8,
+        "post_load_rss_mb": 2889.5,
+        "load_delta_mb": 2857.8,
+        "peak_encode_rss_mb": 7414.5,
+        "pss_mb": 2988.7626953125,
+        "ru_maxrss_mb": 7419.0,
+        "gpu_peak_mb": null,
+        "disk_weight_mb": 1136.4
+      },
+      "metrics": {
+        "aggregate": {
+          "recall@1": {
+            "mean": 0.4935,
+            "ci_low": 0.4093,
+            "ci_high": 0.575,
+            "n": 90
+          },
+          "hit@1": {
+            "mean": 0.7333,
+            "ci_low": 0.6333,
+            "ci_high": 0.8222,
+            "n": 90
+          },
+          "ndcg@1": {
+            "mean": 0.6963,
+            "ci_low": 0.6,
+            "ci_high": 0.7815,
+            "n": 90
+          },
+          "recall@5": {
+            "mean": 0.7893,
+            "ci_low": 0.7133,
+            "ci_high": 0.8556,
+            "n": 90
+          },
+          "hit@5": {
+            "mean": 0.9222,
+            "ci_low": 0.8667,
+            "ci_high": 0.9667,
+            "n": 90
+          },
+          "ndcg@5": {
+            "mean": 0.7528,
+            "ci_low": 0.6827,
+            "ci_high": 0.8131,
+            "n": 90
+          },
+          "recall@10": {
+            "mean": 0.8243,
+            "ci_low": 0.7567,
+            "ci_high": 0.8826,
+            "n": 90
+          },
+          "hit@10": {
+            "mean": 0.9444,
+            "ci_low": 0.8889,
+            "ci_high": 0.9889,
+            "n": 90
+          },
+          "ndcg@10": {
+            "mean": 0.7667,
+            "ci_low": 0.6991,
+            "ci_high": 0.8247,
+            "n": 90
+          },
+          "recall@20": {
+            "mean": 0.8676,
+            "ci_low": 0.8093,
+            "ci_high": 0.9194,
+            "n": 90
+          },
+          "hit@20": {
+            "mean": 0.9556,
+            "ci_low": 0.9111,
+            "ci_high": 0.9889,
+            "n": 90
+          },
+          "ndcg@20": {
+            "mean": 0.7801,
+            "ci_low": 0.7181,
+            "ci_high": 0.8349,
+            "n": 90
+          },
+          "mrr@10": {
+            "mean": 0.8123,
+            "ci_low": 0.738,
+            "ci_high": 0.8781,
+            "n": 90
+          },
+          "map@10": {
+            "mean": 0.7008,
+            "ci_low": 0.6246,
+            "ci_high": 0.7684,
+            "n": 90
+          }
+        },
+        "by_category_ndcg10": {
+          "errata_limit": {
+            "mean": 0.5,
+            "n": 2
+          },
+          "feature_availability": {
+            "mean": 1.0,
+            "n": 1
+          },
+          "general": {
+            "mean": 0.6952,
+            "n": 16
+          },
+          "numeric": {
+            "mean": 0.8019,
+            "n": 33
+          },
+          "package_pinout": {
+            "mean": 0.8256,
+            "n": 10
+          },
+          "table_lookup": {
+            "mean": 0.7556,
+            "n": 28
+          }
+        },
+        "by_lang_ndcg10": {
+          "en": {
+            "mean": 0.7245,
+            "n": 44
+          },
+          "zh": {
+            "mean": 0.807,
+            "n": 46
+          }
+        }
+      }
+    },
+    "e5-large": {
+      "meta": {
+        "hf_id": "intfloat/multilingual-e5-large",
+        "dim": 1024,
+        "max_len": 512,
+        "device": "cpu",
+        "dtype": "float32",
+        "revision": "3d7cfbdacd47fdda877c5cd8a79fbcc4f2a574f3",
+        "threads": 16,
+        "normalize": true,
+        "query_prefix": "query: ",
+        "passage_prefix": "passage: ",
+        "query_encode_kwargs": {},
+        "passage_encode_kwargs": {},
+        "notes": "Mandatory query:/passage: prefixes."
+      },
+      "fairness": {
+        "n_corpus": 1000,
+        "n_queries": 90,
+        "corpus_truncation_rate": 0.104,
+        "query_truncation_rate": 0.0,
+        "corpus_nan_or_zero": 0,
+        "query_nan_or_zero": 0,
+        "load_peak_rss_mb": 550.9
+      },
+      "speed": {
+        "query_latency_p50_ms": 139.65,
+        "query_latency_p95_ms": 197.21,
+        "query_latency_mean_ms": 143.5,
+        "throughput_texts_per_sec": {
+          "1": 7.0,
+          "32": 2.2
+        },
+        "corpus_encode_sec": 454.05,
+        "corpus_texts_per_sec": 2.2
+      },
+      "memory": {
+        "baseline_rss_mb": 31.8,
+        "post_load_rss_mb": 793.7,
+        "load_delta_mb": 761.9,
+        "peak_encode_rss_mb": 3106.0,
+        "pss_mb": 2376.58203125,
+        "ru_maxrss_mb": 3114.7,
+        "gpu_peak_mb": null,
+        "disk_weight_mb": 2135.9
+      },
+      "metrics": {
+        "aggregate": {
+          "recall@1": {
+            "mean": 0.2852,
+            "ci_low": 0.2083,
+            "ci_high": 0.363,
+            "n": 90
+          },
+          "hit@1": {
+            "mean": 0.4556,
+            "ci_low": 0.3444,
+            "ci_high": 0.5556,
+            "n": 90
+          },
+          "ndcg@1": {
+            "mean": 0.4037,
+            "ci_low": 0.3037,
+            "ci_high": 0.5037,
+            "n": 90
+          },
+          "recall@5": {
+            "mean": 0.4954,
+            "ci_low": 0.4056,
+            "ci_high": 0.5898,
+            "n": 90
+          },
+          "hit@5": {
+            "mean": 0.6333,
+            "ci_low": 0.5333,
+            "ci_high": 0.7333,
+            "n": 90
+          },
+          "ndcg@5": {
+            "mean": 0.4576,
+            "ci_low": 0.3699,
+            "ci_high": 0.5403,
+            "n": 90
+          },
+          "recall@10": {
+            "mean": 0.5593,
+            "ci_low": 0.4667,
+            "ci_high": 0.6546,
+            "n": 90
+          },
+          "hit@10": {
+            "mean": 0.6889,
+            "ci_low": 0.5889,
+            "ci_high": 0.7889,
+            "n": 90
+          },
+          "ndcg@10": {
+            "mean": 0.4795,
+            "ci_low": 0.3952,
+            "ci_high": 0.5625,
+            "n": 90
+          },
+          "recall@20": {
+            "mean": 0.6791,
+            "ci_low": 0.5976,
+            "ci_high": 0.7565,
+            "n": 90
+          },
+          "hit@20": {
+            "mean": 0.8444,
+            "ci_low": 0.7667,
+            "ci_high": 0.9111,
+            "n": 90
+          },
+          "ndcg@20": {
+            "mean": 0.5137,
+            "ci_low": 0.4356,
+            "ci_high": 0.5879,
+            "n": 90
+          },
+          "mrr@10": {
+            "mean": 0.5357,
+            "ci_low": 0.4394,
+            "ci_high": 0.626,
+            "n": 90
+          },
+          "map@10": {
+            "mean": 0.4131,
+            "ci_low": 0.3328,
+            "ci_high": 0.4935,
+            "n": 90
+          }
+        },
+        "by_category_ndcg10": {
+          "errata_limit": {
+            "mean": 1.0,
+            "n": 2
+          },
+          "feature_availability": {
+            "mean": 1.0,
+            "n": 1
+          },
+          "general": {
+            "mean": 0.5076,
+            "n": 16
+          },
+          "numeric": {
+            "mean": 0.4618,
+            "n": 33
+          },
+          "package_pinout": {
+            "mean": 0.5686,
+            "n": 10
+          },
+          "table_lookup": {
+            "mean": 0.3968,
+            "n": 28
+          }
+        },
+        "by_lang_ndcg10": {
+          "en": {
+            "mean": 0.5323,
+            "n": 44
+          },
+          "zh": {
+            "mean": 0.4291,
+            "n": 46
+          }
+        }
+      }
+    }
+  }
+}

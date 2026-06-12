@@ -1,0 +1,14 @@
+# ChipWise Enterprise — Embedding Benchmark Dependencies
+# Used only by evaluation/embedding/ (keep out of the main runtime requirements).
+# Install:  pip install -r requirements-eval.txt
+#   (torch CPU wheel: pip install torch --index-url https://download.pytorch.org/whl/cpu)
+
+torch>=2.2,<2.9
+transformers>=4.40,<5.0
+sentence-transformers>=3.0
+FlagEmbedding>=1.2.0          # only for the BGE-M3 hybrid (dense+sparse) reference run
+faiss-cpu>=1.8.0
+psutil>=5.9.0
+einops>=0.7.0                 # required by jina-embeddings-v3 remote code
+matplotlib>=3.7.0
+numpy>=1.26.0
