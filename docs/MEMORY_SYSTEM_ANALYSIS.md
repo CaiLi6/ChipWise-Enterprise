@@ -2,6 +2,7 @@
 
 > 范围：后端短期会话记忆、语义缓存、Agent 工作记忆、长期知识记忆、前端本地会话、Trace/评估记忆。  
 > 当前状态：后端 `/api/v1/query` 与 `/api/v1/query/stream` 已接入短期记忆加载、QueryRewriter、SemanticCache、Agent history、写回与压缩流程。
+> 上线验收：见 [`MEMORY_SYSTEM_QA_CHECKLIST.md`](./MEMORY_SYSTEM_QA_CHECKLIST.md)。
 
 ## 1. 整体设计理念
 
