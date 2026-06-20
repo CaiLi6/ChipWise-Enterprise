@@ -1,8 +1,9 @@
 """Hybrid search: dense + sparse vector fusion via Milvus RRF (§2B1).
 
-Supports two sparse methods, switchable via ``sparse_method``:
+Supports retrieval methods, switchable via ``sparse_method``:
 - ``bgem3``: BGE-M3 sparse embedding vectors (default)
 - ``bm25``:  Milvus 2.5 native BM25 full-text search
+- ``dense``: dense-vector only, useful when Milvus hybrid search is degraded
 """
 
 from __future__ import annotations
@@ -42,10 +43,33 @@ class HybridSearch:
     ) -> list[RetrievalResult]:
         """Encode query and perform hybrid search."""
 
+        if self._sparse_method == "dense":
+            return await self._search_dense(query, top_k, filters, collection)
         if self._sparse_method == "bm25":
             return await self._search_bm25(query, top_k, filters, collection)
 
         return await self._search_bgem3(query, top_k, filters, collection)
+
+    async def _search_dense(
+        self,
+        query: str,
+        top_k: int,
+        filters: dict[str, Any] | None,
+        collection: str,
+    ) -> list[RetrievalResult]:
+        """Dense-only mode: avoid sparse/hybrid search while preserving retrieval."""
+        embed_result = await self._embedding.encode([query], return_sparse=False)
+
+        if not embed_result.dense:
+            logger.warning("Empty embedding result for query: %s", query[:100])
+            return []
+
+        return await self._vector_store.query(
+            vector=embed_result.dense[0],
+            top_k=top_k,
+            filters=filters,
+            collection=collection,
+        )
 
     async def _search_bm25(
         self,

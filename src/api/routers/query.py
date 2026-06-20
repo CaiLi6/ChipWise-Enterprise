@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -12,12 +13,15 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from src.api.dependencies import get_db_pool, get_redis
 from src.api.middleware.auth import get_current_user
 from src.api.schemas.auth import UserInfo
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["query"])
+
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 
 # ---------------------------------------------------------------------------
 # Singleton orchestrator — created lazily on the first request.
@@ -27,7 +31,7 @@ _orchestrator: Any = None
 _orchestrator_initialized = False
 
 
-def _get_or_create_orchestrator() -> Any:
+def _get_or_create_orchestrator(db_pool: Any = None) -> Any:
     """Return (or create) the singleton AgentOrchestrator.
 
     Returns None when the LLM or tool dependencies are unavailable so that
@@ -45,7 +49,9 @@ def _get_or_create_orchestrator() -> Any:
         from src.agent.orchestrator import AgentConfig, AgentOrchestrator
         from src.agent.tool_registry import ToolRegistry
         from src.agent.tools.graph_query import GraphQueryTool
+        from src.agent.tools.knowledge_search import KnowledgeSearchTool
         from src.agent.tools.rag_search import RAGSearchTool
+        from src.agent.tools.sql_query import SQLQueryTool
         from src.api.dependencies import get_settings
         from src.libs.embedding.factory import EmbeddingFactory
         from src.libs.llm.factory import LLMFactory
@@ -104,8 +110,20 @@ def _get_or_create_orchestrator() -> Any:
             except Exception:
                 logger.warning("GraphQueryTool register failed", exc_info=True)
 
+        if db_pool is not None:
+            try:
+                registry.register(SQLQueryTool(db_pool=db_pool))
+            except Exception:
+                logger.warning("SQLQueryTool register failed", exc_info=True)
+
+        if hybrid is not None:
+            try:
+                registry.register(KnowledgeSearchTool(hybrid_search=hybrid))
+            except Exception:
+                logger.warning("KnowledgeSearchTool register failed", exc_info=True)
+
         # Discover remaining zero-arg (or optional-arg) tools
-        registry.discover()
+        registry.discover(skip_names={"sql_query", "knowledge_search"})
 
         config = AgentConfig(
             max_iterations=settings.agent.max_iterations,
@@ -128,9 +146,9 @@ def _get_or_create_orchestrator() -> Any:
     return _orchestrator
 
 
-def get_orchestrator() -> Any:
+def get_orchestrator(db_pool: Any = Depends(get_db_pool)) -> Any:  # noqa: B008
     """FastAPI-compatible dependency for the AgentOrchestrator singleton."""
-    return _get_or_create_orchestrator()
+    return _get_or_create_orchestrator(db_pool=db_pool)
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +363,322 @@ def _extract_citations(tool_calls_log: list[Any]) -> list[dict[str, Any]]:
     return citations
 
 
+def _memory_user_key(current_user: UserInfo) -> str:
+    """Stable per-user namespace for backend memory."""
+    return (current_user.sub or current_user.username or "anonymous").strip() or "anonymous"
+
+
+def _normalize_session_id(raw_session_id: str | None, request: Request) -> str:
+    """Validate frontend-provided session id before using it in Redis keys."""
+    session_id = (raw_session_id or "default").strip()
+    try:
+        settings = request.app.state.settings if hasattr(request.app.state, "settings") else None
+        max_len = int(getattr(getattr(settings, "memory", None), "session_id_max_length", 128))
+    except Exception:
+        max_len = 128
+    if not session_id or len(session_id) > max_len or not _SESSION_ID_RE.match(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    return session_id
+
+
+def _extract_tools_used(tool_calls_log: list[Any]) -> list[str]:
+    tools: list[str] = []
+    for step in tool_calls_log:
+        for tool_call in getattr(step, "tool_calls", []):
+            name = getattr(tool_call, "tool_name", "")
+            if name and name not in tools:
+                tools.append(name)
+    return tools
+
+
+def _should_cache_answer(
+    answer: str,
+    result: Any,
+    grounding_meta: dict[str, Any],
+) -> bool:
+    if not answer.strip():
+        return False
+    if getattr(result, "stopped_reason", "complete") != "complete":
+        return False
+    return not grounding_meta.get("abstained")
+
+
+async def _load_memory_context(
+    req: QueryRequest,
+    request: Request,
+    current_user: UserInfo,
+    redis: Any,
+    trace: Any,
+) -> tuple[str, str, list[dict[str, str]], Any]:
+    """Load Redis short-term memory and return session/user/history/manager."""
+    from src.api.dependencies import (
+        get_conversation_manager_for_redis,
+        get_memory_retriever_for_settings,
+        get_settings,
+    )
+
+    settings = request.app.state.settings if hasattr(request.app.state, "settings") else get_settings()
+    session_id = _normalize_session_id(req.session_id, request)
+    user_key = _memory_user_key(current_user)
+    manager = get_conversation_manager_for_redis(redis, settings)
+    if manager is None:
+        trace.record_stage("memory_degraded", {"reason": "redis_unavailable_or_disabled"})
+        return session_id, user_key, [], None
+
+    try:
+        context = await manager.load_context(user_key, session_id)
+        retriever = get_memory_retriever_for_settings(settings)
+        messages = retriever.select_messages(context, req.query)
+        trace.record_stage("memory_load", {
+            "session_id": session_id,
+            "turns": len(context.turns),
+            "selected_messages": len(messages),
+            "has_summary": bool(context.summary),
+            "entities": context.entities,
+        })
+        return session_id, user_key, messages, manager
+    except Exception:
+        logger.warning("Conversation memory load failed", exc_info=True)
+        trace.record_stage("memory_degraded", {"reason": "load_failed"})
+        return session_id, user_key, [], None
+
+
+async def _rewrite_query_if_needed(
+    raw_query: str,
+    history: list[dict[str, str]],
+    request: Request,
+    trace: Any,
+) -> str:
+    if not history:
+        return raw_query
+    try:
+        from src.api.dependencies import get_query_rewriter_for_settings, get_settings
+
+        settings = request.app.state.settings if hasattr(request.app.state, "settings") else get_settings()
+        rewriter = get_query_rewriter_for_settings(settings)
+        if rewriter is None:
+            trace.record_stage("query_rewrite", {"enabled": False, "reason": "unavailable"})
+            return raw_query
+        rewritten = await rewriter.rewrite(raw_query, history)
+        trace.record_stage("query_rewrite", {
+            "enabled": True,
+            "changed": rewritten != raw_query,
+            "rewritten_query": rewritten if rewritten != raw_query else "",
+        })
+        return rewritten
+    except Exception:
+        logger.warning("Query rewrite failed", exc_info=True)
+        trace.record_stage("query_rewrite", {"enabled": False, "reason": "failed"})
+        return raw_query
+
+
+async def _get_cached_response(
+    rewritten_query: str,
+    request: Request,
+    redis: Any,
+    trace: Any,
+) -> Any:
+    try:
+        from src.api.dependencies import get_semantic_cache_for_redis, get_settings
+
+        settings = request.app.state.settings if hasattr(request.app.state, "settings") else get_settings()
+        cache = get_semantic_cache_for_redis(redis, settings)
+        if cache is None:
+            trace.record_stage("cache_lookup", {"enabled": False})
+            return None
+        cached = await cache.get(rewritten_query, trace=trace)
+        trace.record_stage("cache_lookup", {
+            "enabled": True,
+            "hit": cached is not None,
+            "similarity": round(cached.similarity, 4) if cached else 0.0,
+        })
+        return cached
+    except Exception:
+        logger.warning("Semantic cache lookup failed", exc_info=True)
+        trace.record_stage("cache_lookup", {"enabled": False, "reason": "failed"})
+        return None
+
+
+async def _put_cached_response(
+    rewritten_query: str,
+    answer: str,
+    citations: list[dict[str, Any]],
+    tools_used: list[str],
+    request: Request,
+    redis: Any,
+    session_id: str,
+    user_key: str,
+    trace: Any,
+) -> None:
+    try:
+        from src.api.dependencies import get_semantic_cache_for_redis, get_settings
+
+        settings = request.app.state.settings if hasattr(request.app.state, "settings") else get_settings()
+        cache = get_semantic_cache_for_redis(redis, settings)
+        if cache is None:
+            return
+        await cache.put(
+            rewritten_query,
+            {"answer": answer, "citations": citations, "trace_id": trace.trace_id},
+            tools_used=tools_used,
+            metadata={
+                "session_id": session_id,
+                "user_key": user_key,
+                "citation_count": len(citations),
+            },
+        )
+        trace.record_stage("cache_store", {"stored": True, "tools_used": tools_used})
+    except Exception:
+        logger.warning("Semantic cache store failed", exc_info=True)
+        trace.record_stage("cache_store", {"stored": False, "reason": "failed"})
+
+
+async def _append_memory_exchange(
+    manager: Any,
+    user_key: str,
+    session_id: str,
+    user_query: str,
+    assistant_answer: str,
+    trace: Any,
+) -> None:
+    if manager is None:
+        return
+    try:
+        await manager.append_exchange(user_key, session_id, user_query, assistant_answer)
+        trace.record_stage("memory_store", {"session_id": session_id, "stored": True})
+    except Exception:
+        logger.warning("Conversation memory store failed", exc_info=True)
+        trace.record_stage("memory_store", {"session_id": session_id, "stored": False})
+
+
+async def _execute_query_with_memory(
+    req: QueryRequest,
+    request: Request,
+    current_user: UserInfo,
+    orchestrator: Any,
+    redis: Any,
+) -> dict[str, Any]:
+    """Shared query execution for standard and SSE endpoints."""
+    from src.observability.trace_context import TraceContext
+
+    raw_query = req.query.strip()
+    if not raw_query:
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    trace_id = getattr(request.state, "trace_id", "")
+    trace = TraceContext(trace_id=trace_id)
+    trace.record_stage("request", {"query": raw_query, "user": current_user.username, "session_id": req.session_id})
+
+    session_id, user_key, history, manager = await _load_memory_context(
+        req, request, current_user, redis, trace,
+    )
+    rewritten_query = await _rewrite_query_if_needed(raw_query, history, request, trace)
+
+    cached = await _get_cached_response(rewritten_query, request, redis, trace)
+    if cached is not None:
+        cached_response = cached.response if isinstance(cached.response, dict) else {}
+        answer = str(cached_response.get("answer") or "")
+        citations = cached_response.get("citations") if isinstance(cached_response.get("citations"), list) else []
+        if answer:
+            await _append_memory_exchange(manager, user_key, session_id, raw_query, answer, trace)
+            trace.record_stage("response", {
+                "answer": answer[:800],
+                "citation_count": len(citations),
+                "iterations": 0,
+                "total_tokens": 0,
+                "stopped_reason": "cache_hit",
+                "cache_hit": True,
+            })
+            trace.flush()
+            _schedule_online_eval(
+                request=request,
+                trace_id=trace_id,
+                query=raw_query,
+                answer=answer,
+                citations=citations,
+                iterations=0,
+                duration_ms=(trace._stages[-1].timestamp - trace._start) * 1000 if trace._stages else 0,  # noqa: SLF001
+            )
+            return {
+                "answer": answer,
+                "citations": citations,
+                "trace_id": trace_id,
+                "grounding": {"enabled": False, "cache_hit": True},
+                "cache_hit": True,
+            }
+
+    try:
+        result = await orchestrator.run(
+            query=rewritten_query,
+            conversation_history=history,
+            trace=trace,
+        )
+    except Exception as exc:
+        logger.error("Agent run failed (trace=%s): %s", trace_id, exc)
+        trace.record_stage("error", {"detail": str(exc)[:500]})
+        trace.flush()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Agent error: {exc}",
+        ) from exc
+
+    citations = _extract_citations(result.tool_calls_log)
+    grounded_answer, grounding_meta = _apply_grounding(
+        result.answer, citations, trace, request,
+        stopped_reason=result.stopped_reason,
+    )
+    tools_used = _extract_tools_used(result.tool_calls_log)
+
+    await _append_memory_exchange(manager, user_key, session_id, raw_query, grounded_answer, trace)
+    if _should_cache_answer(grounded_answer, result, grounding_meta):
+        await _put_cached_response(
+            rewritten_query,
+            grounded_answer,
+            citations,
+            tools_used,
+            request,
+            redis,
+            session_id,
+            user_key,
+            trace,
+        )
+
+    trace.record_stage("response", {
+        "answer": grounded_answer[:800],
+        "citation_count": len(citations),
+        "iterations": result.iterations,
+        "total_tokens": result.total_tokens,
+        "stopped_reason": result.stopped_reason,
+        "cache_hit": False,
+        "tools_used": tools_used,
+        "citations_preview": [
+            {"chunk_id": c.get("chunk_id"), "source": c.get("source"),
+             "page": c.get("page_number"), "score": c.get("score"),
+             "content": (c.get("content") or "")[:800]}
+            for c in citations[:10]
+        ],
+    })
+    trace.flush()
+
+    _schedule_online_eval(
+        request=request,
+        trace_id=trace_id,
+        query=raw_query,
+        answer=grounded_answer,
+        citations=citations,
+        iterations=result.iterations,
+        duration_ms=(trace._stages[-1].timestamp - trace._start) * 1000 if trace._stages else 0,  # noqa: SLF001
+    )
+
+    return {
+        "answer": grounded_answer,
+        "citations": citations,
+        "trace_id": trace_id,
+        "grounding": grounding_meta,
+        "cache_hit": False,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -356,13 +690,13 @@ async def query(
     request: Request,
     current_user: UserInfo = Depends(get_current_user),  # noqa: B008
     orchestrator: Any = Depends(get_orchestrator),  # noqa: B008
+    redis: Any = Depends(get_redis),  # noqa: B008
+    db_pool: Any = Depends(get_db_pool),  # noqa: B008
 ) -> QueryResponse:
     """Standard (non-streaming) query endpoint — delegates to AgentOrchestrator.
 
     Returns 503 with a descriptive message when the LLM service is unavailable.
     """
-    trace_id = getattr(request.state, "trace_id", "")
-
     # Fast-fail: check LM Studio health before entering orchestrator
     lm_status = getattr(request.app.state, "lmstudio_status", None)
     if lm_status:
@@ -377,7 +711,7 @@ async def query(
         if primary.get("healthy") and orchestrator is None:
             global _orchestrator_initialized
             _orchestrator_initialized = False
-            orchestrator = _get_or_create_orchestrator()
+            orchestrator = _get_or_create_orchestrator(db_pool=db_pool)
 
     if orchestrator is None:
         raise HTTPException(
@@ -388,56 +722,11 @@ async def query(
             ),
         )
 
-    from src.observability.trace_context import TraceContext
-
-    trace = TraceContext(trace_id=trace_id)
-    trace.record_stage("request", {"query": req.query, "user": current_user.username})
-
-    try:
-        result = await orchestrator.run(query=req.query, trace=trace)
-    except Exception as exc:
-        logger.error("Agent run failed (trace=%s): %s", trace_id, exc)
-        trace.record_stage("error", {"detail": str(exc)[:500]})
-        trace.flush()
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Agent error: {exc}",
-        ) from exc
-
-    citations = _extract_citations(result.tool_calls_log)
-    grounded_answer, _grounding_meta = _apply_grounding(
-        result.answer, citations, trace, request,
-        stopped_reason=result.stopped_reason,
-    )
-    trace.record_stage("response", {
-        "answer": grounded_answer[:800],
-        "citation_count": len(citations),
-        "iterations": result.iterations,
-        "total_tokens": result.total_tokens,
-        "stopped_reason": result.stopped_reason,
-        "citations_preview": [
-            {"chunk_id": c.get("chunk_id"), "source": c.get("source"),
-             "page": c.get("page_number"), "score": c.get("score"),
-             "content": (c.get("content") or "")[:800]}
-            for c in citations[:10]
-        ],
-    })
-    trace.flush()
-
-    _schedule_online_eval(
-        request=request,
-        trace_id=trace_id,
-        query=req.query,
-        answer=grounded_answer,
-        citations=citations,
-        iterations=result.iterations,
-        duration_ms=(trace._stages[-1].timestamp - trace._start) * 1000 if trace._stages else 0,  # noqa: SLF001
-    )
-
+    execution = await _execute_query_with_memory(req, request, current_user, orchestrator, redis)
     return QueryResponse(
-        answer=grounded_answer,
-        citations=citations,
-        trace_id=trace_id,
+        answer=execution["answer"],
+        citations=execution["citations"],
+        trace_id=execution["trace_id"],
     )
 
 
@@ -447,6 +736,7 @@ async def stream_query(
     request: Request,
     current_user: UserInfo = Depends(get_current_user),  # noqa: B008
     orchestrator: Any = Depends(get_orchestrator),  # noqa: B008
+    redis: Any = Depends(get_redis),  # noqa: B008
 ) -> StreamingResponse:
     """SSE streaming query endpoint.
 
@@ -480,17 +770,13 @@ async def stream_query(
             yield f"data: {err}\n\n"
             return
 
-        from src.observability.trace_context import TraceContext
-
-        trace = TraceContext(trace_id=trace_id)
-        trace.record_stage("request", {"query": req.query, "user": current_user.username})
         try:
-            result = await orchestrator.run(query=req.query, trace=trace)
-            citations = _extract_citations(result.tool_calls_log)
-            grounded_answer, grounding_meta = _apply_grounding(
-                result.answer, citations, trace, request,
-                stopped_reason=result.stopped_reason,
+            execution = await _execute_query_with_memory(
+                req, request, current_user, orchestrator, redis,
             )
+            grounded_answer = execution["answer"]
+            citations = execution["citations"]
+            grounding_meta = execution["grounding"]
 
             # Emit answer in small chunks while preserving all whitespace
             # (newlines, blank lines) so the frontend markdown renderer can
@@ -502,44 +788,18 @@ async def stream_query(
                 yield f"data: {payload}\n\n"
                 await asyncio.sleep(0)
 
-            trace.record_stage("response", {
-                "answer": grounded_answer[:800],
-                "citation_count": len(citations),
-                "iterations": result.iterations,
-                "total_tokens": result.total_tokens,
-                "stopped_reason": result.stopped_reason,
-                "citations_preview": [
-                    {"chunk_id": c.get("chunk_id"), "source": c.get("source"),
-                     "page": c.get("page_number"), "score": c.get("score"),
-                     "content": (c.get("content") or "")[:800]}
-                    for c in citations[:10]
-                ],
-            })
-            trace.flush()
-            _schedule_online_eval(
-                request=request,
-                trace_id=trace_id,
-                query=req.query,
-                answer=grounded_answer,
-                citations=citations,
-                iterations=result.iterations,
-                duration_ms=(trace._stages[-1].timestamp - trace._start) * 1000 if trace._stages else 0,  # noqa: SLF001
-            )
             done = json.dumps({
                 "type": "done",
                 "citations": citations,
-                "trace_id": trace_id,
+                "trace_id": execution["trace_id"],
                 "grounding": grounding_meta,
             })
             yield f"data: {done}\n\n"
 
         except asyncio.CancelledError:
             logger.debug("SSE client disconnected (trace=%s)", trace_id)
-            trace.flush()
-        except Exception as exc:
+        except Exception:
             logger.exception("SSE stream error (trace=%s)", trace_id)
-            trace.record_stage("error", {"detail": str(exc)[:500]})
-            trace.flush()
             err = json.dumps({"type": "error", "content": "Stream failed"})
             yield f"data: {err}\n\n"
 

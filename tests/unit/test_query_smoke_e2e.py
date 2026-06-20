@@ -11,19 +11,32 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-
 from src.agent.orchestrator import AgentResult, AgentStep, ToolCallRequest
+from src.api.dependencies import get_redis
 from src.api.main import create_app
 from src.api.middleware.auth import get_current_user
 from src.api.routers.query import get_orchestrator
 from src.api.schemas.auth import UserInfo
+from src.core.conversation_manager import ConversationManager
 from src.core.settings import Settings
 
 
 class _StubOrchestrator:
     """Deterministic stand-in that returns a grounded answer with citations."""
 
-    async def run(self, *, query: str, trace: Any) -> AgentResult:  # noqa: ARG002
+    def __init__(self) -> None:
+        self.last_query = ""
+        self.last_history: list[dict[str, Any]] = []
+
+    async def run(
+        self,
+        *,
+        query: str,
+        trace: Any,
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> AgentResult:  # noqa: ARG002
+        self.last_query = query
+        self.last_history = conversation_history or []
         observation = {
             "results": [
                 {
@@ -65,17 +78,38 @@ class _StubOrchestrator:
         )
 
 
+class _FakeRedis:
+    def __init__(self) -> None:
+        self.store: dict[str, str] = {}
+
+    async def get(self, key: str) -> str | None:
+        return self.store.get(key)
+
+    async def set(self, key: str, value: str, ex: int = 0) -> None:  # noqa: ARG002
+        self.store[key] = value
+
+    async def delete(self, key: str) -> None:
+        self.store.pop(key, None)
+
+
 @pytest.fixture
-def client() -> TestClient:
+def orchestrator() -> _StubOrchestrator:
+    return _StubOrchestrator()
+
+
+@pytest.fixture
+def client(orchestrator: _StubOrchestrator) -> TestClient:
     settings = Settings(
         llm=Settings.model_fields["llm"].default_factory(),  # type: ignore[union-attr]
         embedding=Settings.model_fields["embedding"].default_factory(),  # type: ignore[union-attr]
     )
+    settings.cache.enabled = False
     app = create_app(settings)
     app.dependency_overrides[get_current_user] = lambda: UserInfo(
         sub="u-1", username="smoke", role="user"
     )
-    app.dependency_overrides[get_orchestrator] = lambda: _StubOrchestrator()
+    app.dependency_overrides[get_orchestrator] = lambda: orchestrator
+    app.dependency_overrides[get_redis] = lambda: None
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -101,3 +135,36 @@ class TestQuerySmoke:
         client.app.dependency_overrides[get_orchestrator] = lambda: None
         resp = client.post("/api/v1/query", json={"query": "anything"})
         assert resp.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_query_passes_backend_memory_and_stores_answer(
+        self, orchestrator: _StubOrchestrator
+    ) -> None:
+        settings = Settings(
+            llm=Settings.model_fields["llm"].default_factory(),  # type: ignore[union-attr]
+            embedding=Settings.model_fields["embedding"].default_factory(),  # type: ignore[union-attr]
+        )
+        settings.cache.enabled = False
+        app = create_app(settings)
+        fake_redis = _FakeRedis()
+        manager = ConversationManager(fake_redis)
+        await manager.append_turn("u-1", "s1", "user", "先看 XCKU5PFFVD900")
+
+        app.dependency_overrides[get_current_user] = lambda: UserInfo(
+            sub="u-1", username="smoke", role="user"
+        )
+        app.dependency_overrides[get_orchestrator] = lambda: orchestrator
+        app.dependency_overrides[get_redis] = lambda: fake_redis
+
+        with TestClient(app, raise_server_exceptions=False) as test_client:
+            resp = test_client.post(
+                "/api/v1/query",
+                json={"query": "XCKU5PFFVD900 PCIe 用户时钟频率范围", "session_id": "s1"},
+            )
+
+        assert resp.status_code == 200, resp.text
+        assert orchestrator.last_history
+        assert any("先看 XCKU5PFFVD900" in m["content"] for m in orchestrator.last_history)
+        stored_history = await manager.get_history("u-1", "s1")
+        assert stored_history[-1]["role"] == "assistant"
+        assert "10 MHz" in stored_history[-1]["content"]

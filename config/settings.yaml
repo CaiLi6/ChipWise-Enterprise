@@ -84,7 +84,7 @@ redis:
 # --- Retrieval ---
 retrieval:
   mode: hybrid
-  sparse_method: bgem3   # "bgem3" (BGE-M3 sparse vectors) | "bm25" (Milvus native BM25)
+  sparse_method: dense   # "dense" (dense-only) | "bgem3" (BGE-M3 sparse) | "bm25" (Milvus BM25)
   top_k_search: 30
   top_k_rerank: 10
   rrf_k: 60
@@ -125,6 +125,21 @@ cache:
   similarity_threshold: 0.95
   ttl_conversational: 3600
   ttl_comparison: 14400
+  bucket_size: 8
+
+# --- Short-Term Memory (Redis conversation context) ---
+memory:
+  enabled: true
+  session_ttl: 1800
+  max_turns: 10
+  compression_threshold: 10
+  summary_max_chars: 2000
+  session_id_max_length: 128
+  prompt_budget_chars: 6000
+  recent_turns_always: 4
+  min_relevance_score: 0.12
+  llm_summarization_enabled: false
+  summarizer_role: "router"
 
 # --- Rate Limiting ---
 rate_limit:

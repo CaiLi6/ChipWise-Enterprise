@@ -202,6 +202,13 @@ class TestDiscovery:
         count2 = reg.discover("src.agent.tools")
         assert count2 == 0
 
+    def test_discover_skip_names(self) -> None:
+        """Dependency-requiring tools can be skipped unless manually registered."""
+        reg = ToolRegistry()
+        reg.discover("src.agent.tools", skip_names={"sql_query", "knowledge_search"})
+        assert "sql_query" not in reg
+        assert "knowledge_search" not in reg
+
     def test_auto_discover_alias(self) -> None:
         """auto_discover is an alias for discover."""
         assert ToolRegistry.auto_discover is ToolRegistry.discover

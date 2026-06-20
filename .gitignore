@@ -69,3 +69,10 @@ reports/*.html
 # Playwright test results
 frontend/web/test-results/
 data/kuzu.wal
+
+# Claude Code local machine state (machine/session specific, may contain secrets)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Stray empty root npm lockfile (frontend has its own under frontend/web/)
+/package-lock.json

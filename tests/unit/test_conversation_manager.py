@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock
 
 import pytest
@@ -87,3 +88,42 @@ class TestConversationManager:
         redis._store["session:1:s1"] = "not-valid-json{{"
         history = await mgr.get_history(1, "s1")
         assert history == []
+
+    @pytest.mark.asyncio
+    async def test_old_list_payload_migrates_to_versioned_payload(
+        self, mgr: ConversationManager, redis: AsyncMock
+    ) -> None:
+        redis._store["session:1:s1"] = json.dumps([
+            {"role": "user", "content": "STM32F407"},
+            {"role": "assistant", "content": "已找到 STM32F407"},
+        ])
+        history = await mgr.get_history(1, "s1")
+        assert len(history) == 2
+        stored = json.loads(redis._store["session:1:s1"])
+        assert stored["version"] == 2
+        assert stored["turns"][0]["content"] == "STM32F407"
+
+    @pytest.mark.asyncio
+    async def test_compression_keeps_recent_turns_and_summary(
+        self, mgr: ConversationManager
+    ) -> None:
+        for i in range(12):
+            await mgr.append_turn(1, "s1", "user", f"msg {i}")
+
+        context = await mgr.load_context(1, "s1")
+        assert len(context.turns) == MAX_TURNS
+        assert context.turns[0]["content"] == "msg 2"
+        assert "msg 0" in context.summary
+        assert "msg 1" in context.summary
+
+    @pytest.mark.asyncio
+    async def test_context_messages_include_compressed_summary(
+        self, mgr: ConversationManager
+    ) -> None:
+        for i in range(12):
+            await mgr.append_turn(1, "s1", "user", f"msg {i}")
+
+        messages = (await mgr.load_context(1, "s1")).to_messages()
+        assert messages[0]["role"] == "system"
+        assert "compressed memory" in messages[0]["content"]
+        assert messages[1]["content"] == "msg 2"

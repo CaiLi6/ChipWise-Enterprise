@@ -56,6 +56,17 @@ class TestHybridSearchBM25:
         mock_embedding.encode.assert_called_once_with(["test query"], return_sparse=False)
 
     @pytest.mark.asyncio
+    async def test_dense_mode_skips_hybrid_search(self, mock_embedding: AsyncMock, mock_store: AsyncMock) -> None:
+        hs = HybridSearch(mock_embedding, mock_store, sparse_method="dense")
+        results = await hs.search("test query", top_k=5)
+        assert len(results) == 3
+        mock_embedding.encode.assert_called_once_with(["test query"], return_sparse=False)
+        mock_store.query.assert_called_once()
+        mock_store.hybrid_search.assert_not_called()
+        kw = mock_store.query.call_args.kwargs
+        assert kw["top_k"] == 5
+
+    @pytest.mark.asyncio
     async def test_bm25_fallback_to_dense(self, mock_embedding: AsyncMock, mock_store: AsyncMock) -> None:
         mock_store.hybrid_search.side_effect = RuntimeError("bm25 field missing")
         hs = HybridSearch(mock_embedding, mock_store, sparse_method="bm25")

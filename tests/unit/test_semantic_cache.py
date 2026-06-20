@@ -35,6 +35,7 @@ class TestSemanticCache:
     def redis(self) -> AsyncMock:
         r = AsyncMock()
         r._lists: dict[str, list[str]] = {}
+        r._ttls: dict[str, int] = {}
 
         async def _lrange(key: str, start: int, stop: int):
             return r._lists.get(key, [])
@@ -47,7 +48,7 @@ class TestSemanticCache:
                 r._lists[key] = r._lists[key][start:] if stop == -1 else r._lists[key][start:stop + 1]
 
         async def _expire(key: str, ttl: int):
-            pass
+            r._ttls[key] = ttl
 
         async def _publish(channel: str, message: str):
             pass
@@ -127,3 +128,20 @@ class TestSemanticCache:
     def test_comparison_gets_longer_ttl(self, cache: SemanticCache) -> None:
         # This is implicitly tested via put — just ensure no crash
         pass
+
+    @pytest.mark.asyncio
+    async def test_configurable_ttl_and_bucket_size(
+        self, embedding: AsyncMock, redis: AsyncMock
+    ) -> None:
+        cache = SemanticCache(
+            embedding,
+            redis,
+            ttl_conversational=11,
+            ttl_comparison=22,
+            bucket_size=1,
+        )
+        await cache.put("q1", {"answer": "a1"}, ["rag_search"])
+        await cache.put("q2", {"answer": "a2"}, ["chip_compare"])
+
+        assert list(redis._ttls.values())[-1] == 22
+        assert len(next(iter(redis._lists.values()))) == 1

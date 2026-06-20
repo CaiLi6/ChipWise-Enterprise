@@ -89,6 +89,21 @@ class CacheSettings(BaseModel):
     similarity_threshold: float = 0.95
     ttl_conversational: int = 3600
     ttl_comparison: int = 14400
+    bucket_size: int = 8
+
+
+class MemorySettings(BaseModel):
+    enabled: bool = True
+    session_ttl: int = 1800
+    max_turns: int = 10
+    compression_threshold: int = 10
+    summary_max_chars: int = 2000
+    session_id_max_length: int = 128
+    prompt_budget_chars: int = 6000
+    recent_turns_always: int = 4
+    min_relevance_score: float = 0.12
+    llm_summarization_enabled: bool = False
+    summarizer_role: str = "router"
 
 
 class RateLimitSettings(BaseModel):
@@ -204,6 +219,7 @@ class Settings(BaseModel):
     redis: RedisSettings = Field(default_factory=RedisSettings)
     retrieval: RetrievalSettings = Field(default_factory=RetrievalSettings)
     cache: CacheSettings = Field(default_factory=CacheSettings)
+    memory: MemorySettings = Field(default_factory=MemorySettings)
     rate_limit: RateLimitSettings = Field(default_factory=RateLimitSettings)
     agent: AgentSettings = Field(default_factory=AgentSettings)
     graph_store: GraphStoreSettings = Field(default_factory=GraphStoreSettings)

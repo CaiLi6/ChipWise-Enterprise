@@ -100,7 +100,11 @@ class ToolRegistry:
     # Auto-discovery
     # ------------------------------------------------------------------
 
-    def discover(self, tools_package: str = "src.agent.tools") -> int:
+    def discover(
+        self,
+        tools_package: str = "src.agent.tools",
+        skip_names: set[str] | None = None,
+    ) -> int:
         """Import all modules under *tools_package* and register any
         concrete :class:`BaseTool` subclasses found.
 
@@ -108,6 +112,7 @@ class ToolRegistry:
         Returns the number of **newly** registered tools.
         """
         count = 0
+        skip_names = skip_names or set()
         try:
             package = importlib.import_module(tools_package)
         except ModuleNotFoundError:
@@ -143,6 +148,10 @@ class ToolRegistry:
                         instance = obj()
                     except Exception:
                         logger.warning("Could not instantiate %s", obj, exc_info=True)
+                        continue
+
+                    if instance.name in skip_names:
+                        logger.debug("Skipping disabled auto-discovered tool: %s", instance.name)
                         continue
 
                     if instance.name in self._tools:

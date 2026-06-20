@@ -30,6 +30,7 @@ class CachedResponse:
     tools_used: list[str]
     created_at: float
     similarity: float = 1.0
+    metadata: dict[str, Any] | None = None
 
 
 def _cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -55,9 +56,22 @@ class SemanticCache:
     Graceful degradation: Redis/embedding failures → cache miss / silent skip.
     """
 
-    def __init__(self, embedding_client: BaseEmbedding, redis: Any) -> None:
+    def __init__(
+        self,
+        embedding_client: BaseEmbedding,
+        redis: Any,
+        *,
+        similarity_threshold: float = SIMILARITY_THRESHOLD,
+        ttl_conversational: int = TTL_CONVERSATIONAL,
+        ttl_comparison: int = TTL_COMPARISON,
+        bucket_size: int = BUCKET_SIZE,
+    ) -> None:
         self._embedding = embedding_client
         self._redis = redis
+        self._similarity_threshold = similarity_threshold
+        self._ttl_conversational = ttl_conversational
+        self._ttl_comparison = ttl_comparison
+        self._bucket_size = bucket_size
 
     async def get(
         self, query: str, trace: Any | None = None
@@ -76,7 +90,7 @@ class SemanticCache:
             for raw in raw_entries:
                 entry = json.loads(raw)
                 sim = _cosine_similarity(vec, entry["vector"])
-                if sim >= SIMILARITY_THRESHOLD:
+                if sim >= self._similarity_threshold:
                     if trace:
                         trace.record_stage("cache_hit", {"similarity": sim, "query": query})
                     return CachedResponse(
@@ -85,6 +99,7 @@ class SemanticCache:
                         tools_used=entry.get("tools_used", []),
                         created_at=entry["created_at"],
                         similarity=sim,
+                        metadata=entry.get("metadata") or {},
                     )
             return None
         except Exception:
@@ -96,6 +111,7 @@ class SemanticCache:
         query: str,
         response: dict[str, Any],
         tools_used: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Store a query-response pair in the cache."""
         try:
@@ -104,18 +120,23 @@ class SemanticCache:
             bucket_key = _lsh_bucket_key(vec)
             redis_key = f"gptcache:bucket:{bucket_key}"
 
-            ttl = TTL_COMPARISON if tools_used and "chip_compare" in tools_used else TTL_CONVERSATIONAL
+            ttl = (
+                self._ttl_comparison
+                if tools_used and "chip_compare" in tools_used
+                else self._ttl_conversational
+            )
 
             entry = {
                 "query": query,
                 "vector": vec,
                 "response": response,
                 "tools_used": tools_used or [],
+                "metadata": metadata or {},
                 "created_at": time.time(),
             }
             await self._redis.rpush(redis_key, json.dumps(entry, ensure_ascii=False))
             # Trim bucket + set TTL
-            await self._redis.ltrim(redis_key, -BUCKET_SIZE, -1)
+            await self._redis.ltrim(redis_key, -self._bucket_size, -1)
             await self._redis.expire(redis_key, ttl)
         except Exception:
             logger.warning("Semantic cache put failed", exc_info=True)

@@ -112,6 +112,136 @@ async def get_redis(settings: Settings = Depends(get_settings)) -> Any:  # noqa:
     return _redis_client
 
 
+# ── Memory helpers (Redis short-term memory + semantic cache) ─────────
+
+_conversation_manager: Any = None
+_conversation_manager_redis_id: int | None = None
+_semantic_cache: Any = None
+_semantic_cache_redis_id: int | None = None
+_query_rewriter: Any = None
+_memory_retriever: Any = None
+
+
+def get_conversation_manager_for_redis(
+    redis: Any,
+    settings: Settings | None = None,
+) -> Any:
+    """Return a Redis-backed ConversationManager for the given Redis client.
+
+    This is intentionally not a FastAPI dependency: query endpoints already
+    receive the Redis client and can skip memory when Redis is unavailable.
+    """
+    if redis is None:
+        return None
+    settings = settings or get_settings()
+    memory_cfg = getattr(settings, "memory", None)
+    if memory_cfg is not None and not getattr(memory_cfg, "enabled", True):
+        return None
+
+    global _conversation_manager, _conversation_manager_redis_id
+    redis_id = id(redis)
+    if _conversation_manager is not None and _conversation_manager_redis_id == redis_id:
+        return _conversation_manager
+
+    from src.core.conversation_manager import ConversationManager
+    from src.core.memory_summarizer import MemorySummarizer
+
+    summarizer = MemorySummarizer()
+    if getattr(memory_cfg, "llm_summarization_enabled", False):
+        try:
+            from src.libs.llm.factory import LLMFactory
+
+            cfg = settings.model_dump()
+            llm = LLMFactory.create(cfg, role=getattr(memory_cfg, "summarizer_role", "router"))
+            summarizer = MemorySummarizer(llm=llm)
+        except Exception as exc:
+            logger.warning("Memory summarizer LLM unavailable; using fallback: %s", exc)
+
+    _conversation_manager = ConversationManager(
+        redis,
+        session_ttl=getattr(memory_cfg, "session_ttl", 1800),
+        max_turns=getattr(memory_cfg, "max_turns", 10),
+        compression_threshold=getattr(memory_cfg, "compression_threshold", 10),
+        summary_max_chars=getattr(memory_cfg, "summary_max_chars", 2000),
+        summarizer=summarizer,
+    )
+    _conversation_manager_redis_id = redis_id
+    return _conversation_manager
+
+
+def get_query_rewriter_for_settings(settings: Settings | None = None) -> Any:
+    """Return a lazy QueryRewriter backed by the router LLM."""
+    global _query_rewriter
+    if _query_rewriter is not None:
+        return _query_rewriter
+    try:
+        from src.core.query_rewriter import QueryRewriter
+        from src.libs.llm.factory import LLMFactory
+
+        cfg = (settings or get_settings()).model_dump()
+        try:
+            llm = LLMFactory.create(cfg, role="router")
+        except Exception:
+            llm = LLMFactory.create(cfg, role="primary")
+        _query_rewriter = QueryRewriter(llm)
+    except Exception as exc:
+        logger.warning("QueryRewriter unavailable: %s", exc)
+        _query_rewriter = None
+    return _query_rewriter
+
+
+def get_memory_retriever_for_settings(settings: Settings | None = None) -> Any:
+    """Return a prompt-budgeted short-term memory retriever."""
+    global _memory_retriever
+    if _memory_retriever is not None:
+        return _memory_retriever
+    from src.core.memory_retriever import MemoryRetrievalConfig, MemoryRetriever
+
+    memory_cfg = getattr(settings or get_settings(), "memory", None)
+    _memory_retriever = MemoryRetriever(
+        MemoryRetrievalConfig(
+            prompt_budget_chars=getattr(memory_cfg, "prompt_budget_chars", 6000),
+            recent_turns_always=getattr(memory_cfg, "recent_turns_always", 4),
+            min_relevance_score=getattr(memory_cfg, "min_relevance_score", 0.12),
+        )
+    )
+    return _memory_retriever
+
+
+def get_semantic_cache_for_redis(redis: Any, settings: Settings | None = None) -> Any:
+    """Return a settings-driven SemanticCache for the given Redis client."""
+    if redis is None:
+        return None
+    settings = settings or get_settings()
+    cache_cfg = getattr(settings, "cache", None)
+    if cache_cfg is not None and not getattr(cache_cfg, "enabled", True):
+        return None
+
+    global _semantic_cache, _semantic_cache_redis_id
+    redis_id = id(redis)
+    if _semantic_cache is not None and _semantic_cache_redis_id == redis_id:
+        return _semantic_cache
+
+    try:
+        from src.cache.semantic_cache import SemanticCache
+        from src.libs.embedding.factory import EmbeddingFactory
+
+        embedding = EmbeddingFactory.create(settings.model_dump())
+        _semantic_cache = SemanticCache(
+            embedding,
+            redis,
+            similarity_threshold=getattr(cache_cfg, "similarity_threshold", 0.95),
+            ttl_conversational=getattr(cache_cfg, "ttl_conversational", 3600),
+            ttl_comparison=getattr(cache_cfg, "ttl_comparison", 14400),
+            bucket_size=getattr(cache_cfg, "bucket_size", 8),
+        )
+        _semantic_cache_redis_id = redis_id
+    except Exception as exc:
+        logger.warning("SemanticCache unavailable: %s", exc)
+        _semantic_cache = None
+    return _semantic_cache
+
+
 # ── HTTP clients for model services ─────────────────────────────────
 
 
