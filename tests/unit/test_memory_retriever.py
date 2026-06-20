@@ -58,3 +58,14 @@ class TestMemoryRetriever:
         retriever = MemoryRetriever(MemoryRetrievalConfig(prompt_budget_chars=80))
         messages = retriever.select_messages(context, "anything")
         assert sum(len(msg["content"]) for msg in messages) <= 80
+
+    def test_includes_pinned_memory_after_summary(self) -> None:
+        context = ConversationContext(
+            summary="用户关注 XCKU5PFFVD900。",
+            pinned=[{"content": "以后默认优先用 sql_query 查单参数"}],
+            turns=[],
+        )
+        retriever = MemoryRetriever(MemoryRetrievalConfig(prompt_budget_chars=500))
+        messages = retriever.select_messages(context, "DSP 数量")
+        assert len(messages) == 2
+        assert "Pinned conversation memory" in messages[1]["content"]

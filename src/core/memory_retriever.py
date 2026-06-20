@@ -44,6 +44,13 @@ class MemoryRetriever:
         if remaining <= 0:
             return messages
 
+        pinned = self._format_pinned(context.pinned, remaining)
+        if pinned:
+            messages.append({"role": "system", "content": pinned})
+            remaining -= len(pinned)
+            if remaining <= 0:
+                return messages
+
         selected = self._select_turns(context.turns, query)
         for turn in selected:
             content = str(turn.get("content", "")).strip()
@@ -85,6 +92,18 @@ class MemoryRetriever:
         if chips and any(str(chip).lower() in query_terms for chip in chips):
             entity_bonus = 0.3
         return min(1.0, importance * 0.55 + overlap * 0.35 + entity_bonus)
+
+    @staticmethod
+    def _format_pinned(pinned: list[dict[str, Any]], budget: int) -> str:
+        if not pinned or budget <= 0:
+            return ""
+        lines = ["Pinned conversation memory (must preserve):"]
+        for item in pinned:
+            content = str(item.get("content", "")).strip()
+            if content:
+                lines.append(f"- {content[:300]}")
+        text = "\n".join(lines)
+        return text[:budget] if len(lines) > 1 else ""
 
     @staticmethod
     def _terms(text: str) -> set[str]:

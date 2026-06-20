@@ -63,6 +63,7 @@ class MemoryImportanceScorer:
             "topics": sorted(set(topics)),
             "entities": {"chips": chips} if chips else {},
             "facts": facts,
+            "pinned": bool(_PREFERENCE.search(clean)),
         }
 
     @staticmethod

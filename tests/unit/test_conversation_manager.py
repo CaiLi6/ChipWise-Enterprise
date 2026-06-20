@@ -127,3 +127,36 @@ class TestConversationManager:
         assert messages[0]["role"] == "system"
         assert "compressed memory" in messages[0]["content"]
         assert messages[1]["content"] == "msg 2"
+
+    @pytest.mark.asyncio
+    async def test_compaction_creates_checkpoint_and_pinned_memory(
+        self, redis: AsyncMock
+    ) -> None:
+        mgr = ConversationManager(redis, max_turns=2, compression_threshold=3)
+        await mgr.append_turn(1, "s1", "user", "以后默认优先用 sql_query 查单参数")
+        await mgr.append_turn(1, "s1", "assistant", "已记住这个偏好")
+        await mgr.append_turn(1, "s1", "user", "XCKU5PFFVD900 PCIe user clock is 300 MHz")
+        await mgr.append_turn(1, "s1", "assistant", "XCKU5PFFVD900 PCIe user clock is 300 MHz")
+
+        context = await mgr.load_context(1, "s1")
+        assert context.checkpoints
+        assert context.pinned
+        assert any("sql_query" in item["content"] for item in context.pinned)
+        assert context.checkpoints[-1]["compacted_turn_count"] >= 1
+
+    @pytest.mark.asyncio
+    async def test_budget_based_compaction_before_turn_threshold(
+        self, redis: AsyncMock
+    ) -> None:
+        mgr = ConversationManager(
+            redis,
+            max_turns=10,
+            compression_threshold=10,
+            compaction_budget_chars=80,
+        )
+        await mgr.append_turn(1, "s1", "user", "A" * 100)
+        await mgr.append_turn(1, "s1", "assistant", "B" * 100)
+
+        context = await mgr.load_context(1, "s1")
+        assert context.checkpoints
+        assert len(context.turns) == 1

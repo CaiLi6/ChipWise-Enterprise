@@ -98,6 +98,9 @@ class MemorySettings(BaseModel):
     max_turns: int = 10
     compression_threshold: int = 10
     summary_max_chars: int = 2000
+    compaction_budget_chars: int = 8000
+    checkpoint_limit: int = 5
+    pinned_limit: int = 20
     session_id_max_length: int = 128
     prompt_budget_chars: int = 6000
     recent_turns_always: int = 4

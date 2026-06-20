@@ -22,6 +22,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import uuid4
 
 from src.core.memory_scorer import MemoryImportanceScorer
 
@@ -31,6 +32,9 @@ SESSION_TTL = 1800  # 30 minutes
 MAX_TURNS = 10
 SUMMARY_MAX_CHARS = 2000
 PAYLOAD_VERSION = 2
+COMPACTION_BUDGET_CHARS = 8000
+CHECKPOINT_LIMIT = 5
+PINNED_LIMIT = 20
 
 _PART_NUMBER = re.compile(r"\b([A-Z][A-Z0-9\-]{3,19}\d[A-Z0-9\-]*)\b")
 
@@ -42,6 +46,8 @@ class ConversationContext:
     summary: str = ""
     turns: list[dict[str, Any]] = field(default_factory=list)
     entities: dict[str, list[str]] = field(default_factory=dict)
+    pinned: list[dict[str, Any]] = field(default_factory=list)
+    checkpoints: list[dict[str, Any]] = field(default_factory=list)
 
     def to_messages(self) -> list[dict[str, str]]:
         """Return prompt-ready messages: compressed summary, then recent turns."""
@@ -51,6 +57,17 @@ class ConversationContext:
                 "role": "system",
                 "content": "Conversation summary (compressed memory):\n" + self.summary.strip(),
             })
+        if self.pinned:
+            pinned_lines = [
+                f"- {item.get('content', '')}"
+                for item in self.pinned
+                if str(item.get("content", "")).strip()
+            ]
+            if pinned_lines:
+                messages.append({
+                    "role": "system",
+                    "content": "Pinned conversation memory (must preserve):\n" + "\n".join(pinned_lines),
+                })
         messages.extend(
             {"role": turn["role"], "content": turn["content"]}
             for turn in self.turns
@@ -74,6 +91,9 @@ class ConversationManager:
         max_turns: int = MAX_TURNS,
         compression_threshold: int | None = None,
         summary_max_chars: int = SUMMARY_MAX_CHARS,
+        compaction_budget_chars: int = COMPACTION_BUDGET_CHARS,
+        checkpoint_limit: int = CHECKPOINT_LIMIT,
+        pinned_limit: int = PINNED_LIMIT,
         summarizer: Any | None = None,
         scorer: MemoryImportanceScorer | None = None,
     ) -> None:
@@ -82,6 +102,9 @@ class ConversationManager:
         self._max_turns = max_turns
         self._compression_threshold = compression_threshold or max_turns
         self._summary_max_chars = summary_max_chars
+        self._compaction_budget_chars = compaction_budget_chars
+        self._checkpoint_limit = checkpoint_limit
+        self._pinned_limit = pinned_limit
         self._summarizer = summarizer
         self._scorer = scorer or MemoryImportanceScorer()
 
@@ -101,8 +124,10 @@ class ConversationManager:
         payload = await self._load_payload(user_id, session_id)
         return ConversationContext(
             summary=str(payload.get("summary") or ""),
-            turns=self._prompt_turns(payload.get("turns", [])),
+            turns=self._stored_turns(payload.get("turns", [])),
             entities=self._normalize_entities(payload.get("entities")),
+            pinned=self._normalize_pinned(payload.get("pinned")),
+            checkpoints=self._normalize_checkpoints(payload.get("checkpoints")),
         )
 
     async def append_turn(
@@ -178,6 +203,8 @@ class ConversationManager:
         payload["summary"] = str(payload.get("summary") or "")[-self._summary_max_chars:]
         payload["turns"] = self._stored_turns(payload.get("turns", []))
         payload["entities"] = self._normalize_entities(payload.get("entities"))
+        payload["pinned"] = self._normalize_pinned(payload.get("pinned"))
+        payload["checkpoints"] = self._normalize_checkpoints(payload.get("checkpoints"))
         return payload
 
     async def _save_payload(
@@ -193,19 +220,47 @@ class ConversationManager:
 
     async def _compress_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         turns = self._stored_turns(payload.get("turns", []))
-        if len(turns) <= self._compression_threshold:
+        if not self._should_compact(payload, turns):
             payload["turns"] = turns
             return payload
 
-        keep = max(1, self._max_turns)
+        keep = self._keep_count_for_compaction(payload, turns)
         old_turns = turns[:-keep]
         recent_turns = turns[-keep:]
-        payload["summary"] = await self._summarize_turns(
+        new_summary = await self._summarize_turns(
             str(payload.get("summary") or ""),
             old_turns,
         )
+        pinned = self._merge_pinned(
+            self._normalize_pinned(payload.get("pinned")),
+            self._extract_pinned(old_turns),
+        )
+        checkpoint = self._build_checkpoint(new_summary, old_turns, pinned)
+        checkpoints = self._normalize_checkpoints(payload.get("checkpoints"))
+        checkpoints.append(checkpoint)
+        payload["summary"] = new_summary
         payload["turns"] = recent_turns
+        payload["pinned"] = pinned
+        payload["checkpoints"] = checkpoints[-self._checkpoint_limit:]
         return payload
+
+    def _should_compact(self, payload: dict[str, Any], turns: list[dict[str, Any]]) -> bool:
+        if len(turns) > self._compression_threshold:
+            return True
+        return self._estimated_chars(payload, turns) > self._compaction_budget_chars
+
+    def _keep_count_for_compaction(self, payload: dict[str, Any], turns: list[dict[str, Any]]) -> int:
+        if len(turns) > self._max_turns:
+            return max(1, self._max_turns)
+        if self._estimated_chars(payload, turns) > self._compaction_budget_chars:
+            return max(1, len(turns) // 2)
+        return max(1, self._max_turns)
+
+    @staticmethod
+    def _estimated_chars(payload: dict[str, Any], turns: list[dict[str, Any]]) -> int:
+        return len(str(payload.get("summary") or "")) + sum(
+            len(str(turn.get("content", ""))) for turn in turns
+        )
 
     async def _summarize_turns(
         self, existing_summary: str, old_turns: list[dict[str, Any]]
@@ -222,6 +277,23 @@ class ConversationManager:
             except Exception:
                 logger.warning("Conversation summarizer failed; using fallback", exc_info=True)
         return self._fallback_summary(existing_summary, old_turns)
+
+    def _build_checkpoint(
+        self,
+        summary: str,
+        old_turns: list[dict[str, Any]],
+        pinned: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        entities = self._extract_entities_from_turns(old_turns)
+        return {
+            "checkpoint_id": uuid4().hex,
+            "created_at": time.time(),
+            "summary": summary[-self._summary_max_chars:],
+            "compacted_turn_count": len(old_turns),
+            "pinned_count": len(pinned),
+            "entities": entities,
+            "estimated_chars": sum(len(str(t.get("content", ""))) for t in old_turns),
+        }
 
     def _fallback_summary(self, existing_summary: str, turns: list[dict[str, Any]]) -> str:
         lines: list[str] = []
@@ -249,6 +321,8 @@ class ConversationManager:
             "summary": "",
             "turns": [],
             "entities": {},
+            "pinned": [],
+            "checkpoints": [],
             "updated_at": time.time(),
         }
 
@@ -294,6 +368,39 @@ class ConversationManager:
     def _extract_entities(content: str) -> dict[str, list[str]]:
         return MemoryImportanceScorer().score_turn("user", content).get("entities", {})
 
+    def _extract_pinned(self, turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        pinned: list[dict[str, Any]] = []
+        for turn in turns:
+            metadata = turn.get("metadata") if isinstance(turn.get("metadata"), dict) else {}
+            if not metadata.get("pinned") and float(metadata.get("importance") or 0.0) < 0.9:
+                continue
+            content = str(turn.get("content", "")).strip()
+            if not content:
+                continue
+            pinned.append({
+                "role": turn.get("role", "user"),
+                "content": content[:500],
+                "topics": metadata.get("topics", []),
+                "entities": metadata.get("entities", {}),
+                "created_at": turn.get("created_at") or time.time(),
+            })
+        return pinned
+
+    def _merge_pinned(
+        self,
+        existing: list[dict[str, Any]],
+        new_items: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in [*existing, *new_items]:
+            content = str(item.get("content", "")).strip()
+            if not content or content in seen:
+                continue
+            seen.add(content)
+            merged.append(item)
+        return merged[-self._pinned_limit:]
+
     @classmethod
     def _extract_entities_from_turns(cls, turns: list[dict[str, Any]]) -> dict[str, list[str]]:
         entities: dict[str, list[str]] = {}
@@ -312,6 +419,32 @@ class ConversationManager:
                 if vals:
                     out[str(key)] = vals
         return out
+
+    @staticmethod
+    def _normalize_pinned(raw: Any) -> list[dict[str, Any]]:
+        if not isinstance(raw, list):
+            return []
+        out: list[dict[str, Any]] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            content = str(item.get("content", "")).strip()
+            if not content:
+                continue
+            out.append({
+                "role": str(item.get("role", "user")),
+                "content": content,
+                "topics": item.get("topics") if isinstance(item.get("topics"), list) else [],
+                "entities": item.get("entities") if isinstance(item.get("entities"), dict) else {},
+                "created_at": float(item.get("created_at") or time.time()),
+            })
+        return out
+
+    @staticmethod
+    def _normalize_checkpoints(raw: Any) -> list[dict[str, Any]]:
+        if not isinstance(raw, list):
+            return []
+        return [item for item in raw if isinstance(item, dict)]
 
     @staticmethod
     def _merge_entities(

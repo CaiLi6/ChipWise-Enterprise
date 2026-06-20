@@ -163,6 +163,9 @@ def get_conversation_manager_for_redis(
         max_turns=getattr(memory_cfg, "max_turns", 10),
         compression_threshold=getattr(memory_cfg, "compression_threshold", 10),
         summary_max_chars=getattr(memory_cfg, "summary_max_chars", 2000),
+        compaction_budget_chars=getattr(memory_cfg, "compaction_budget_chars", 8000),
+        checkpoint_limit=getattr(memory_cfg, "checkpoint_limit", 5),
+        pinned_limit=getattr(memory_cfg, "pinned_limit", 20),
         summarizer=summarizer,
     )
     _conversation_manager_redis_id = redis_id

@@ -134,6 +134,9 @@ memory:
   max_turns: 10
   compression_threshold: 10
   summary_max_chars: 2000
+  compaction_budget_chars: 8000
+  checkpoint_limit: 5
+  pinned_limit: 20
   session_id_max_length: 128
   prompt_budget_chars: 6000
   recent_turns_always: 4

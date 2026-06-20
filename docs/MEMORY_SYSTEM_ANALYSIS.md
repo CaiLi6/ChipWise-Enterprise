@@ -95,6 +95,26 @@ current_user.sub || current_user.username || "anonymous"
   "entities": {
     "chips": ["XCKU5PFFVD900"]
   },
+  "pinned": [
+    {
+      "role": "user",
+      "content": "以后默认优先用 sql_query 查单参数",
+      "topics": ["preference"],
+      "entities": {},
+      "created_at": 1710000002.0
+    }
+  ],
+  "checkpoints": [
+    {
+      "checkpoint_id": "...",
+      "created_at": 1710000100.0,
+      "summary": "结构化 compact 摘要",
+      "compacted_turn_count": 8,
+      "pinned_count": 1,
+      "entities": {"chips": ["XCKU5PFFVD900"]},
+      "estimated_chars": 4200
+    }
+  ],
   "updated_at": 1710000001.0
 }
 ```
@@ -114,6 +134,9 @@ memory:
   max_turns: 10
   compression_threshold: 10
   summary_max_chars: 2000
+  compaction_budget_chars: 8000
+  checkpoint_limit: 5
+  pinned_limit: 20
   session_id_max_length: 128
   prompt_budget_chars: 6000
   recent_turns_always: 4
@@ -131,6 +154,9 @@ memory:
 | `max_turns` | prompt 中保留的最近消息数 |
 | `compression_threshold` | 超过多少条 turns 后触发压缩 |
 | `summary_max_chars` | compressed summary 最大字符数 |
+| `compaction_budget_chars` | 即使 turn 数未超阈值，超过该字符预算也触发 compact |
+| `checkpoint_limit` | 保留最近 checkpoint 数量 |
+| `pinned_limit` | 保留 pinned 记忆数量 |
 | `session_id_max_length` | session_id 最大长度 |
 | `prompt_budget_chars` | 注入 Agent prompt 的记忆最大字符预算 |
 | `recent_turns_always` | 无论相关性如何都保留的最近消息数 |
@@ -230,30 +256,44 @@ SSE 查询：
 - done 前已获得完整 grounded answer；
 - 客户端断开时不保存半截 assistant turn。
 
-### 4.4 压缩流程
+### 4.4 Claude Code 风格 checkpoint compaction
 
-当 `turns` 数量超过 `compression_threshold`：
+压缩机制参考 Claude Code 的 compact 思路：不是简单截断历史，而是按预算触发、生成 checkpoint、保护 pinned 记忆，并把任务状态压成结构化摘要。
+
+触发条件：
+
+1. `turns` 数量超过 `compression_threshold`；
+2. 或 `summary + turns` 估算字符数超过 `compaction_budget_chars`。
+
+压缩流程：
 
 ```text
-turns = old_turns + recent_turns
-old_turns -> summary
-recent_turns -> keep max_turns
-summary + recent_turns -> Redis payload
+turns
+  -> detect pinned turns (用户显式记住/偏好/高重要性)
+  -> old_turns compact into structured summary
+  -> build checkpoint(summary, compacted_turn_count, entities, pinned_count)
+  -> keep recent turns
+  -> persist summary + pinned + checkpoints + recent turns
 ```
 
 当前实现包含 `MemorySummarizer` 扩展点。默认使用确定性 fallback 摘要；开启 `llm_summarization_enabled` 后，可使用 router LLM 生成结构化摘要。摘要固定保留：
 
+- 当前目标；
 - 已确认事实；
 - 用户偏好；
-- 当前目标；
-- 未完成问题；
 - 关键实体。
+- 工具证据；
+- 未完成问题；
+- 下一步。
 
 摘要会裁剪到 `summary_max_chars`，避免压缩记忆无限增长。
 
 压缩目标：
 
 - 保留用户已讨论芯片、参数、意图、未完成问题；
+- 保护 pinned facts/preferences，不因普通 compact 丢失；
+- 保留 checkpoint 链，支持后续审计和恢复；
+- 数字/参数只能来自 turn metadata 中的 facts 或输入工具证据；
 - 删除冗余寒暄和重复文本；
 - 避免 prompt 随会话线性增长。
 
