@@ -551,12 +551,120 @@ async def _append_memory_exchange(
         trace.record_stage("memory_store", {"session_id": session_id, "stored": False})
 
 
+async def _load_governed_memory_messages(
+    db_pool: Any,
+    user_key: str,
+    trace: Any,
+) -> list[dict[str, str]]:
+    """Load confirmed user/project memories as advisory prompt context."""
+    try:
+        from src.core.memory_governance import MemoryGovernanceStore
+
+        records = await MemoryGovernanceStore(db_pool).list_memories(
+            owner_key=user_key,
+            status="confirmed",
+            limit=8,
+        )
+        if not records:
+            return []
+        lines = ["Confirmed user/project memories (advisory; do not override citations):"]
+        for rec in records[:8]:
+            kind = rec.get("kind", "memory")
+            content = str(rec.get("content", "")).strip()
+            if content:
+                lines.append(f"- [{kind}] {content[:300]}")
+        trace.record_stage("governed_memory", {"loaded": len(lines) - 1})
+        return [{"role": "system", "content": "\n".join(lines)}] if len(lines) > 1 else []
+    except Exception:
+        logger.warning("Governed memory load failed", exc_info=True)
+        trace.record_stage("governed_memory", {"loaded": 0, "reason": "failed"})
+        return []
+
+
+async def _load_procedure_messages(
+    db_pool: Any,
+    query: str,
+    trace: Any,
+) -> list[dict[str, str]]:
+    """Load procedural memory hints for tool selection."""
+    try:
+        from src.core.procedural_memory import ProceduralMemoryStore
+
+        store = ProceduralMemoryStore(db_pool)
+        hints = await store.get_hints(query)
+        content = store.format_hints(hints)
+        trace.record_stage("procedural_memory", {
+            "hints": [h.intent for h in hints],
+        })
+        return [{"role": "system", "content": content}] if content else []
+    except Exception:
+        logger.warning("Procedural memory load failed", exc_info=True)
+        trace.record_stage("procedural_memory", {"hints": [], "reason": "failed"})
+        return []
+
+
+async def _record_episode_and_learn(
+    *,
+    db_pool: Any,
+    user_key: str,
+    session_id: str,
+    trace_id: str,
+    raw_query: str,
+    rewritten_query: str,
+    answer: str,
+    tools_used: list[str],
+    citations: list[dict[str, Any]],
+    grounding_meta: dict[str, Any],
+    outcome: str,
+    trace: Any,
+) -> None:
+    """Persist episodic/procedural/governed memory. Never blocks responses."""
+    try:
+        from src.core.episodic_memory import EpisodicMemoryStore, MemoryEpisode
+        from src.core.memory_consolidator import MemoryConsolidator
+        from src.core.memory_governance import MemoryGovernanceStore, explicit_memory_from_query
+        from src.core.procedural_memory import ProceduralMemoryStore
+
+        episode = MemoryEpisode(
+            user_key=user_key,
+            session_id=session_id,
+            trace_id=trace_id,
+            query_text=raw_query,
+            rewritten_query=rewritten_query,
+            tools_used=tools_used,
+            citations=citations[:20],
+            grounding=grounding_meta,
+            answer_preview=answer[:1000],
+            outcome=outcome,
+        )
+        episode_id = await EpisodicMemoryStore(db_pool).record_episode(episode)
+        success = outcome in {"success", "cache_hit"}
+        await ProceduralMemoryStore(db_pool).record_outcome(rewritten_query or raw_query, tools_used, success)
+
+        governance = MemoryGovernanceStore(db_pool)
+        explicit = explicit_memory_from_query(raw_query, owner_key=user_key, trace_id=trace_id)
+        explicit_id = await governance.create_memory(explicit) if explicit else None
+
+        candidate = MemoryConsolidator().propose_from_episode(episode)
+        candidate_id = await governance.create_memory(candidate) if candidate else None
+        trace.record_stage("episodic_memory", {
+            "episode_id": episode_id,
+            "outcome": outcome,
+            "explicit_memory_id": explicit_id,
+            "candidate_memory_id": candidate_id,
+        })
+    except Exception:
+        logger.warning("Episode/procedure memory recording failed", exc_info=True)
+        trace.record_stage("episodic_memory", {"stored": False, "reason": "failed"})
+
+
 async def _execute_query_with_memory(
     req: QueryRequest,
     request: Request,
     current_user: UserInfo,
     orchestrator: Any,
     redis: Any,
+    db_pool: Any = None,
 ) -> dict[str, Any]:
     """Shared query execution for standard and SSE endpoints."""
     from src.observability.trace_context import TraceContext
@@ -573,6 +681,8 @@ async def _execute_query_with_memory(
         req, request, current_user, redis, trace,
     )
     rewritten_query = await _rewrite_query_if_needed(raw_query, history, request, trace)
+    governed_messages = await _load_governed_memory_messages(db_pool, user_key, trace)
+    procedure_messages = await _load_procedure_messages(db_pool, rewritten_query, trace)
 
     cached = await _get_cached_response(rewritten_query, request, redis, trace)
     if cached is not None:
@@ -581,6 +691,20 @@ async def _execute_query_with_memory(
         citations = cached_response.get("citations") if isinstance(cached_response.get("citations"), list) else []
         if answer:
             await _append_memory_exchange(manager, user_key, session_id, raw_query, answer, trace)
+            await _record_episode_and_learn(
+                db_pool=db_pool,
+                user_key=user_key,
+                session_id=session_id,
+                trace_id=trace_id,
+                raw_query=raw_query,
+                rewritten_query=rewritten_query,
+                answer=answer,
+                tools_used=list(getattr(cached, "tools_used", []) or []),
+                citations=citations,
+                grounding_meta={"enabled": False, "cache_hit": True},
+                outcome="cache_hit",
+                trace=trace,
+            )
             trace.record_stage("response", {
                 "answer": answer[:800],
                 "citation_count": len(citations),
@@ -610,7 +734,7 @@ async def _execute_query_with_memory(
     try:
         result = await orchestrator.run(
             query=rewritten_query,
-            conversation_history=history,
+            conversation_history=[*governed_messages, *procedure_messages, *history],
             trace=trace,
         )
     except Exception as exc:
@@ -628,8 +752,27 @@ async def _execute_query_with_memory(
         stopped_reason=result.stopped_reason,
     )
     tools_used = _extract_tools_used(result.tool_calls_log)
+    outcome = "success"
+    if grounding_meta.get("abstained"):
+        outcome = "abstained"
+    elif result.stopped_reason != "complete":
+        outcome = result.stopped_reason
 
     await _append_memory_exchange(manager, user_key, session_id, raw_query, grounded_answer, trace)
+    await _record_episode_and_learn(
+        db_pool=db_pool,
+        user_key=user_key,
+        session_id=session_id,
+        trace_id=trace_id,
+        raw_query=raw_query,
+        rewritten_query=rewritten_query,
+        answer=grounded_answer,
+        tools_used=tools_used,
+        citations=citations,
+        grounding_meta=grounding_meta,
+        outcome=outcome,
+        trace=trace,
+    )
     if _should_cache_answer(grounded_answer, result, grounding_meta):
         await _put_cached_response(
             rewritten_query,
@@ -722,7 +865,7 @@ async def query(
             ),
         )
 
-    execution = await _execute_query_with_memory(req, request, current_user, orchestrator, redis)
+    execution = await _execute_query_with_memory(req, request, current_user, orchestrator, redis, db_pool)
     return QueryResponse(
         answer=execution["answer"],
         citations=execution["citations"],
@@ -737,6 +880,7 @@ async def stream_query(
     current_user: UserInfo = Depends(get_current_user),  # noqa: B008
     orchestrator: Any = Depends(get_orchestrator),  # noqa: B008
     redis: Any = Depends(get_redis),  # noqa: B008
+    db_pool: Any = Depends(get_db_pool),  # noqa: B008
 ) -> StreamingResponse:
     """SSE streaming query endpoint.
 
@@ -772,7 +916,7 @@ async def stream_query(
 
         try:
             execution = await _execute_query_with_memory(
-                req, request, current_user, orchestrator, redis,
+                req, request, current_user, orchestrator, redis, db_pool,
             )
             grounded_answer = execution["answer"]
             citations = execution["citations"]

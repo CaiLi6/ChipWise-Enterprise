@@ -124,6 +124,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     from src.api.routers.golden import router as golden_router
     from src.api.routers.health import router as health_router
     from src.api.routers.knowledge import router as knowledge_router
+    from src.api.routers.memory import router as memory_router
     from src.api.routers.query import router as query_router
     from src.api.routers.sso import router as sso_router
     from src.api.routers.tasks import router as tasks_router
@@ -137,6 +138,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(tasks_router)
     app.include_router(compare_router)
     app.include_router(knowledge_router)
+    app.include_router(memory_router)
     app.include_router(query_router)
     app.include_router(traces_router)
     app.include_router(evaluations_router)

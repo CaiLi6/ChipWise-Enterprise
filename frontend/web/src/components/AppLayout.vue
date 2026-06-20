@@ -16,6 +16,7 @@ const navItems = [
   { path: '/documents',   label: '文档管理', icon: 'doc'   },
   { path: '/traces',      label: 'Trace 查看器', icon: 'trace' },
   { path: '/evaluations', label: 'RAG 评估',  icon: 'eval'  },
+  { path: '/memory',      label: '记忆管理',  icon: 'memory' },
 ] as const
 
 function navigate(path: string) { router.push(path) }
@@ -95,6 +96,7 @@ function initial() { return (auth.username || 'U')[0].toUpperCase() }
             <svg v-if="n.icon === 'doc'"     viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h6"/></svg>
             <svg v-if="n.icon === 'trace'"   viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
             <svg v-if="n.icon === 'eval'"    viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18M7 14l4-4 4 4 5-7"/></svg>
+            <svg v-if="n.icon === 'memory'"  viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a7 7 0 0 0-7 7v3a4 4 0 0 0 4 4h1v4h4v-4h1a4 4 0 0 0 4-4v-3a7 7 0 0 0-7-7z"/><path d="M9 10h.01M15 10h.01M9 14h6"/></svg>
           </span>
           <span v-if="!layout.collapsed" class="nav-label">{{ n.label }}</span>
         </button>

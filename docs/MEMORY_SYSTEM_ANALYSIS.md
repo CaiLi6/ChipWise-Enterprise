@@ -32,6 +32,9 @@ ChipWise 的记忆系统采用分层架构，不把所有上下文都塞进 LLM 
 | 长期结构化记忆 | chips、parameters、documents、rules、errata、alternatives | PostgreSQL | 精确参数查询、审计、结构化关系源数据 |
 | 长期向量记忆 | datasheet chunks、knowledge notes embeddings | Milvus | RAG 语义检索、BM25/hybrid 检索 |
 | 长期图谱记忆 | Chip/Parameter/Errata/Document/DesignRule/Peripheral 图 | Kùzu | Graph RAG、多跳关系、替代料/errata 查询 |
+| 情节记忆 | query、tools、citations、grounding、outcome | PostgreSQL `memory_episodes` | 查询回放、经验沉淀、失败规避 |
+| 过程记忆 | intent、trigger patterns、recommended tools、stop rules | PostgreSQL `memory_procedures` + 内置默认策略 | 工具选择经验、成功路径复用 |
+| 治理记忆 | user/project memory records | PostgreSQL `memory_records` | 用户显式记忆、项目候选记忆、确认/拒绝/删除 |
 | 前端本地记忆 | chat sessions、current session id、token/user | localStorage | 浏览器多会话 UX 和登录态 |
 | 观测/评估记忆 | trace stages、eval metrics、batch metadata | `logs/*.jsonl` | 回放、质量评估、调试 |
 
@@ -459,7 +462,136 @@ upload document
 - `src/libs/vector_store/milvus_store.py`
 - `src/libs/graph_store/kuzu_store.py`
 
-## 8. 长期记忆工具接入
+## 8. 情节记忆、过程记忆与治理记忆
+
+新增迁移：
+
+- `alembic/versions/003_memory_system.py`
+
+新增核心模块：
+
+- `src/core/episodic_memory.py`
+- `src/core/procedural_memory.py`
+- `src/core/memory_governance.py`
+- `src/core/memory_consolidator.py`
+
+### 8.1 情节记忆：`memory_episodes`
+
+每次查询会生成一个 episode，用于后续回放、评估、过程学习和候选记忆生成。
+
+```json
+{
+  "id": "...",
+  "user_key": "u-1",
+  "session_id": "s1",
+  "trace_id": "...",
+  "query_text": "原始问题",
+  "rewritten_query": "改写后的问题",
+  "tools_used": ["sql_query", "rag_search"],
+  "citations": [{"chunk_id": "c1"}],
+  "grounding": {"coverage": 0.95, "abstained": false},
+  "eval_metrics": {},
+  "answer_preview": "答案摘要",
+  "outcome": "success|cache_hit|abstained|error",
+  "created_at": "..."
+}
+```
+
+写入时机：
+
+- cache hit：记录 `outcome=cache_hit`。
+- Agent 成功：记录 `outcome=success`。
+- grounding 拒答：记录 `outcome=abstained`。
+- 早停或错误：记录 stopped reason。
+
+DB 不可用时，episode 写入 no-op，不影响用户响应。
+
+### 8.2 过程记忆：`memory_procedures`
+
+过程记忆保存“某类问题适合什么工具链”的可复用策略。
+
+来源：
+
+1. 内置默认策略：
+   - 单参数/数值问题：`sql_query -> rag_search`
+   - 替代/兼容关系：`graph_query -> rag_search`
+   - 设计规则/errata：`rag_search -> graph_query`
+2. 成功 episode 自动更新：
+   - 根据 query intent 和 tools_used upsert 到 `memory_procedures`。
+
+查询时：
+
+```text
+rewritten_query
+  -> ProceduralMemoryStore.get_hints()
+  -> format_hints()
+  -> 注入 Agent system message
+```
+
+过程记忆只是 advisory hint，不能绕过 grounding 或 citations。
+
+### 8.3 治理记忆：`memory_records`
+
+治理记忆是可查看、确认、拒绝、删除的 user/project memory。
+
+```json
+{
+  "id": "...",
+  "scope": "user|project",
+  "owner_key": "u-1|null",
+  "kind": "note|preference|procedure_hint|lesson",
+  "content": "...",
+  "tags": ["explicit", "episode"],
+  "source": "manual|user_explicit|episode",
+  "source_id": "...",
+  "status": "candidate|confirmed|rejected",
+  "metadata": {},
+  "use_count": 0
+}
+```
+
+进入 prompt 的规则：
+
+- 只有 `status=confirmed` 的 user/project memories 会被注入。
+- candidate 仅作为候选，不进入 Agent prompt。
+- 用户显式“记住/以后/remember”会创建 confirmed user memory。
+- 高质量 episode 会创建 candidate project memory，等待确认。
+
+API：
+
+- `GET /api/v1/memory`
+- `POST /api/v1/memory`
+- `PATCH /api/v1/memory/{memory_id}/status`
+- `DELETE /api/v1/memory/{memory_id}`
+- `GET /api/v1/memory/episodes`
+
+前端页面：
+
+- `/memory`
+- `frontend/web/src/views/MemoryView.vue`
+- `frontend/web/src/api/memory.ts`
+
+能力：
+
+- 查看 confirmed/candidate/rejected 记忆；
+- 手动创建 user/project 记忆；
+- 确认、拒绝、删除候选记忆；
+- 查看最近 query episodes、工具链路和 outcome。
+
+### 8.4 评估驱动候选记忆
+
+`MemoryConsolidator` 会从高质量 episode 中提议 candidate memory。
+
+候选条件：
+
+- `outcome=success`
+- citations 数量达标
+- grounding 未 abstain
+- grounding coverage 达到阈值
+
+候选不会自动生效，必须通过治理 API 确认为 `confirmed` 后才会进入 prompt。
+
+## 9. 长期记忆工具接入
 
 `query.py` 现在手动注册依赖型工具：
 
@@ -476,13 +608,14 @@ registry.discover(skip_names={"sql_query", "knowledge_search"})
 
 这样 Agent 不会看到“可调用但无 DB/search 依赖”的 `sql_query` 或 `knowledge_search`。
 
-## 9. 前端本地记忆
+## 10. 前端本地记忆
 
 实现位置：
 
 - `frontend/web/src/stores/query.ts`
 - `frontend/web/src/stores/auth.ts`
 - `frontend/web/src/views/QueryView.vue`
+- `frontend/web/src/views/MemoryView.vue`
 
 ### 9.1 Chat sessions
 
@@ -538,7 +671,7 @@ chipwise_user
 - token 明文在 localStorage，仍有 XSS 风险。
 - 后续可考虑 httpOnly secure cookie 保存 refresh token。
 
-## 10. Trace 与评估记忆
+## 11. Trace 与评估记忆
 
 Trace：
 
@@ -551,12 +684,15 @@ Trace：
 - `memory_load`
 - `memory_degraded`
 - `query_rewrite`
+- `governed_memory`
+- `procedural_memory`
 - `cache_lookup`
 - `cache_hit`
 - `iteration`
 - `grounding`
 - `memory_store`
 - `cache_store`
+- `episodic_memory`
 - `response`
 - `error`
 
@@ -566,7 +702,7 @@ Evaluation：
 - 批处理写入 `logs/eval_batches.jsonl`
 - 在线采样由 `src/evaluation/online_sampler.py` 触发。
 
-## 11. 端到端运行流程
+## 12. 端到端运行流程
 
 ### 11.1 非流式查询
 
@@ -578,11 +714,16 @@ POST /api/v1/query
   -> semantic cache lookup
      -> hit: return cached response
      -> miss:
+        -> load confirmed governed memories
+        -> load procedural memory hints
         -> AgentOrchestrator.run(rewritten_query, conversation_history)
         -> tools read PG/Milvus/Kùzu
         -> extract citations
         -> grounding
         -> write short-term memory
+        -> write episodic memory
+        -> update procedural memory
+        -> create explicit/candidate governed memories when applicable
         -> write semantic cache when safe
         -> trace/eval
         -> JSON response
@@ -598,7 +739,7 @@ POST /api/v1/query/stream
   -> data: done frame with citations/trace_id/grounding
 ```
 
-## 12. 降级策略
+## 13. 降级策略
 
 | 故障 | 行为 |
 |---|---|
@@ -606,10 +747,11 @@ POST /api/v1/query/stream
 | session corrupt JSON | warning + 空上下文，查询继续 |
 | QueryRewriter LLM 不可用 | 使用原始 query |
 | SemanticCache embedding/Redis 失败 | 视为 cache miss |
+| Episodic/procedural/governed memory DB 不可用 | no-op，查询继续 |
 | Agent tool 后端不可用 | 工具返回 error，Agent 按现有策略处理 |
 | grounding 失败 | 使用原 answer，记录 warning |
 
-## 13. 测试覆盖
+## 14. 测试覆盖
 
 相关测试：
 
@@ -619,6 +761,7 @@ POST /api/v1/query/stream
 - `tests/unit/test_query_smoke_e2e.py`
 - `tests/unit/test_tool_registry.py`
 - `tests/unit/test_memory_retriever.py`
+- `tests/unit/test_memory_advanced.py`
 
 覆盖点：
 
@@ -632,8 +775,12 @@ POST /api/v1/query/stream
 - query 路由传入 backend history；
 - query 成功后写回 assistant answer；
 - dependency tools auto-discover skip。
+- episodic memory no-op degradation；
+- procedural default hints and formatting；
+- explicit user memory capture；
+- high-quality episode candidate consolidation。
 
-## 14. 剩余风险与后续优化
+## 15. 剩余风险与后续优化
 
 1. `ConversationManager` 当前仍是读-改-写模式；高并发同一 session 可进一步改为 Redis transaction 或 Lua。
 2. fallback 压缩是确定性摘要；如需要更强摘要质量，可接入 router LLM summarizer。
@@ -641,7 +788,7 @@ POST /api/v1/query/stream
 4. cache invalidation 当前仍是 bucket scan + query 字符串匹配，规模扩大后应改为 metadata index。
 5. 前端 token/localStorage 仍有 XSS 风险，可规划 httpOnly cookie 化。
 
-## 15. 最终状态
+## 16. 最终状态
 
 当前实现已经从“前端本地多会话 + 后端单轮 Agent”升级为：
 
@@ -650,6 +797,7 @@ POST /api/v1/query/stream
   + QueryRewriter 上下文改写
   + SemanticCache 相似查询复用
   + Agent conversation_history
+  + Episodic/Procedural/Governed Memory
   + PG/Milvus/Kùzu 长期知识工具
   + Trace/Eval 质量闭环
 ```

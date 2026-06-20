@@ -17,6 +17,7 @@ const router = createRouter({
         { path: 'documents', name: 'Documents', component: () => import('@/views/DocumentsView.vue') },
         { path: 'traces', name: 'Traces', component: () => import('@/views/TracesView.vue') },
         { path: 'evaluations', name: 'Evaluations', component: () => import('@/views/EvaluationsView.vue') },
+        { path: 'memory', name: 'Memory', component: () => import('@/views/MemoryView.vue') },
       ],
     },
   ],
