@@ -136,6 +136,18 @@ class TestQuerySmoke:
         resp = client.post("/api/v1/query", json={"query": "anything"})
         assert resp.status_code == 503
 
+    def test_stream_query_emits_status_and_tokens(self, client: TestClient) -> None:
+        with client.stream(
+            "POST",
+            "/api/v1/query/stream",
+            json={"query": "XCKU5PFFVD900 PCIe 用户时钟频率范围"},
+        ) as resp:
+            body = "".join(resp.iter_text())
+        assert resp.status_code == 200
+        assert '"type": "status"' in body
+        assert '"type": "token"' in body
+        assert '"type": "done"' in body
+
     @pytest.mark.asyncio
     async def test_query_passes_backend_memory_and_stores_answer(
         self, orchestrator: _StubOrchestrator

@@ -55,13 +55,21 @@ async function handleSend() {
   store.addMessage({ role: 'user', content: text })
   store.addMessage({ role: 'assistant', content: '' })
   store.isStreaming = true
+  let answerStarted = false
   input.value = ''
   autoSize()
   scrollToBottom()
 
   await streamQuery(
     { query: text, session_id: store.currentSessionId },
-    (chunk) => { store.appendToLast(chunk); scrollToBottom() },
+    (chunk) => {
+      if (!answerStarted) {
+        replaceLastAssistant('')
+        answerStarted = true
+      }
+      store.appendToLast(chunk)
+      scrollToBottom()
+    },
     (citations) => {
       if (citations && citations.length) store.setLastCitations(citations)
       store.isStreaming = false; scrollToBottom()
@@ -69,6 +77,12 @@ async function handleSend() {
     (message) => {
       replaceLastAssistant(message)
       store.isStreaming = false; scrollToBottom()
+    },
+    (message) => {
+      if (!answerStarted && message) {
+        replaceLastAssistant(`⏳ ${message}`)
+        scrollToBottom()
+      }
     },
   )
 }

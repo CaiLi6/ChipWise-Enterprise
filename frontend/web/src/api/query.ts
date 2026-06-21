@@ -12,6 +12,7 @@ export async function sendQuery(data: QueryRequest): Promise<QueryResponse> {
  * with a `ReadableStream` body and parse SSE frames manually.
  *
  * Backend frame format (one per event, separated by blank line):
+ *   data: {"type": "status", "content": "正在检索..."}
  *   data: {"type": "token", "content": "word "}
  *   data: {"type": "done",  "citations": [...], "trace_id": "..."}
  *   data: {"type": "error", "content": "..."}
@@ -21,6 +22,7 @@ export async function streamQuery(
   onChunk: (text: string) => void,
   onDone: (citations?: Citation[], traceId?: string) => void,
   onError?: (message: string) => void,
+  onStatus?: (message: string) => void,
 ): Promise<void> {
   // Dev mock when no backend base URL is configured
   if (import.meta.env.DEV && !import.meta.env.VITE_API_BASE_URL) {
@@ -123,7 +125,9 @@ export async function streamQuery(
               citations?: Citation[]
               trace_id?: string
             }
-            if (msg.type === 'token') {
+            if (msg.type === 'status') {
+              onStatus?.(msg.content || '')
+            } else if (msg.type === 'token') {
               onChunk(msg.content || '')
             } else if (msg.type === 'done') {
               onDone(msg.citations, msg.trace_id)

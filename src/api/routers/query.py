@@ -884,8 +884,9 @@ async def stream_query(
 ) -> StreamingResponse:
     """SSE streaming query endpoint.
 
-    Streams LLM tokens as Server-Sent Events::
+    Streams progress + answer chunks as Server-Sent Events::
 
+        data: {"type": "status", "content": "正在检索..."}\n\n
         data: {"type": "token", "content": "..."}\n\n
         data: {"type": "done", "citations": [...], "trace_id": "..."}\n\n
 
@@ -893,34 +894,62 @@ async def stream_query(
     """
     trace_id = getattr(request.state, "trace_id", "")
 
+    def _sse(payload: dict[str, Any]) -> str:
+        return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
     async def _generate() -> AsyncGenerator[str, None]:
         # Fast-fail: check LM Studio health
         lm_status = getattr(request.app.state, "lmstudio_status", None)
         if lm_status:
             primary = lm_status.get("lmstudio_primary", {})
             if not primary.get("healthy", True):
-                err = json.dumps({
+                yield _sse({
                     "type": "error",
                     "content": "LLM service temporarily unavailable",
                 })
-                yield f"data: {err}\n\n"
                 return
 
         if orchestrator is None:
-            err = json.dumps({
+            yield _sse({
                 "type": "error",
                 "content": "Agent Orchestrator unavailable — check LM Studio",
             })
-            yield f"data: {err}\n\n"
             return
 
+        task: asyncio.Task[dict[str, Any]] | None = None
         try:
-            execution = await _execute_query_with_memory(
+            task = asyncio.create_task(_execute_query_with_memory(
                 req, request, current_user, orchestrator, redis, db_pool,
-            )
+            ))
+            status_messages = [
+                "正在加载会话记忆与语义缓存…",
+                "正在选择工具并检索芯片资料…",
+                "正在进行 Agent 推理与工具调用…",
+                "正在校验引用、数字一致性并写入记忆…",
+            ]
+            status_idx = 0
+            while not task.done():
+                yield _sse({
+                    "type": "status",
+                    "content": status_messages[min(status_idx, len(status_messages) - 1)],
+                    "trace_id": trace_id,
+                })
+                status_idx += 1
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=2.0)
+                except TimeoutError:
+                    continue
+
+            execution = await task
             grounded_answer = execution["answer"]
             citations = execution["citations"]
             grounding_meta = execution["grounding"]
+
+            yield _sse({
+                "type": "status",
+                "content": "正在流式输出答案…",
+                "trace_id": execution["trace_id"],
+            })
 
             # Emit answer in small chunks while preserving all whitespace
             # (newlines, blank lines) so the frontend markdown renderer can
@@ -928,24 +957,27 @@ async def stream_query(
             chunk_size = 24
             for i in range(0, len(grounded_answer), chunk_size):
                 chunk = grounded_answer[i : i + chunk_size]
-                payload = json.dumps({"type": "token", "content": chunk})
-                yield f"data: {payload}\n\n"
+                yield _sse({"type": "token", "content": chunk})
                 await asyncio.sleep(0)
 
-            done = json.dumps({
+            yield _sse({
                 "type": "done",
                 "citations": citations,
                 "trace_id": execution["trace_id"],
                 "grounding": grounding_meta,
             })
-            yield f"data: {done}\n\n"
 
         except asyncio.CancelledError:
             logger.debug("SSE client disconnected (trace=%s)", trace_id)
+            if task is not None:
+                task.cancel()
+            raise
+        except HTTPException as exc:
+            content = exc.detail if isinstance(exc.detail, str) else "Stream failed"
+            yield _sse({"type": "error", "content": content})
         except Exception:
             logger.exception("SSE stream error (trace=%s)", trace_id)
-            err = json.dumps({"type": "error", "content": "Stream failed"})
-            yield f"data: {err}\n\n"
+            yield _sse({"type": "error", "content": "Stream failed"})
 
     return StreamingResponse(
         _generate(),
