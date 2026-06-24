@@ -14,6 +14,19 @@
 
 评测不依赖 LLM-as-judge，而是用 PostgreSQL 中的源数据自动构建 golden cases，再用 Kùzu/GraphSearch 查询结果做确定性比对。
 
+完整评测链路：
+
+```text
+PostgreSQL 源数据
+  -> 自动生成 graph golden cases
+  -> 调用 GraphSearch / Kùzu 查询
+  -> 对比 expected vs actual
+  -> 计算 coverage / recall / pass_rate / latency
+  -> 输出 reports/eval/graphrag_eval_latest.json
+```
+
+这样设计的原因是：知识图谱评测首先要验证“图里有没有正确关系、能不能查出来”，这类问题可以用源数据做确定性判断，不需要让 LLM 主观打分。
+
 评测维度：
 
 | 维度 | 指标 | 含义 |
@@ -25,7 +38,67 @@
 | 延迟 | avg_latency_ms | 图查询平均延迟 |
 | 总体通过率 | pass_rate | golden cases 的通过比例 |
 
-## 2. 当前图谱规模
+## 2. Golden Cases 如何生成
+
+GraphRAG 评测从 PostgreSQL 中构建三类 deterministic golden cases。
+
+| Case 类型 | 问题 | 期望答案来自哪里 | 评估方式 |
+|---|---|---|---|
+| `alternative` | 某芯片的替代/兼容芯片有哪些 | PG `chip_alternatives` | Kùzu `ALTERNATIVE` 边是否查回期望替代料 |
+| `param_range` | 哪些芯片某参数在指定范围 | PG `chip_parameters` | Kùzu `HAS_PARAM` 是否查回期望芯片 |
+| `subgraph` | 返回某芯片一跳知识子图 | PG 参数/文档/替代关系数量 | Kùzu 子图返回节点/边是否达到最低期望 |
+
+为了避免把明显噪声当作替代料 golden，`alternative` case 会过滤一部分非芯片 token，例如电压、内存类型、文档 token 等。
+
+示例：
+
+```json
+{
+  "case_id": "alt-0-PH2A106FLG900",
+  "case_type": "alternative",
+  "question": "PH2A106FLG900 的替代/兼容芯片有哪些？",
+  "query_args": {"part_number": "PH2A106FLG900"},
+  "expected": {"part_numbers": ["XCKU5PFFVD900"]}
+}
+```
+
+## 3. 指标怎么算
+
+核心指标：
+
+```text
+pass_rate = 通过的 graph golden cases / 总 cases
+mean_recall = 各 case recall 的平均值
+alternative_recall = 替代关系查回率
+param_range_recall = 参数范围查回率
+subgraph_recall = 子图查询查回率
+coverage = Kùzu 中节点/边数量 / PostgreSQL 源数据数量
+latency = 每条图查询耗时
+```
+
+各 case 的判定逻辑：
+
+- `alternative`：expected part numbers 必须包含在 `GraphSearch.find_alternatives()` 返回结果中。
+- `param_range`：expected chip 必须出现在 `GraphSearch.param_range_search()` 返回结果中。
+- `subgraph`：`GraphSearch.get_chip_subgraph()` 返回数量必须大于等于根据 PG 源数据估算的最低结果数。
+
+覆盖率计算逻辑：
+
+```text
+chip_node_coverage        = Kùzu Chip nodes / PG chips
+parameter_node_coverage   = Kùzu Parameter nodes / PG chip_parameters
+document_node_coverage    = Kùzu Document nodes / PG linked documents
+has_param_edge_coverage   = Kùzu HAS_PARAM edges / PG chip_parameters
+alternative_edge_coverage = Kùzu ALTERNATIVE edges / PG chip_alternatives
+documented_in_coverage    = Kùzu DOCUMENTED_IN edges / PG linked documents
+has_rule_edge_coverage    = Kùzu HAS_RULE edges / PG design_rules
+```
+
+换句话说，这套评测直接回答：
+
+> PostgreSQL 里明明有这条关系/参数，Kùzu 图谱能不能查出来？覆盖了多少？查得快不快？
+
+## 4. 当前图谱规模
 
 PostgreSQL 源数据：
 
@@ -53,7 +126,7 @@ Kùzu 图谱数据：
 | HAS_RULE edges | 390 |
 | HAS_ERRATA edges | 0 |
 
-## 3. 覆盖率结果
+## 5. 覆盖率结果
 
 | 指标 | 结果 |
 |---|---:|
@@ -71,7 +144,7 @@ Kùzu 图谱数据：
 
 > `errata=0`，所以 errata 覆盖率在数学上为 1.0，但业务上代表“当前没有可评测勘误数据”，不能说明 errata 图谱效果好。
 
-## 4. 检索质量结果
+## 6. 检索质量结果
 
 共构建 60 条 deterministic graph golden cases：
 
@@ -88,7 +161,7 @@ Kùzu 图谱数据：
 | subgraph_pass_rate | 1.0000 |
 | subgraph_recall | 1.0000 |
 
-## 5. 代表性结果
+## 7. 代表性结果
 
 ### 5.1 PH2A106FLG900 替代关系
 
@@ -111,7 +184,7 @@ compat_score = 1.0
 
 说明 `Chip -> Parameter`、`Chip -> Document`、`Chip -> DesignRule` 这几类结构化边基本可用。
 
-## 6. 主要短板
+## 8. 主要短板
 
 ### 6.1 Chip node coverage 只有 48.05%
 
@@ -143,7 +216,7 @@ PG 中有 589 条 `chip_alternatives`，Kùzu 中有 141 条 `ALTERNATIVE` 边�
 - 提升 errata parser；
 - 建 `Chip -> Errata -> Peripheral` 的真实数据集。
 
-## 7. 结论
+## 9. 结论
 
 当前知识图谱效果可以概括为：
 
@@ -154,13 +227,13 @@ errata 类图谱还没有形成有效数据；
 整体 deterministic GraphRAG case pass rate = 93.33%，平均查询延迟约 5.39 ms。
 ```
 
-## 8. 面试回答版本
+## 10. 面试回答版本
 
 如果面试官问“你的知识图谱效果如何？”，可以这样回答：
 
 > 我们对 GraphRAG 做了确定性评测，不依赖 LLM 评判，而是用 PostgreSQL 源数据自动生成 graph golden cases，再用 Kùzu 查询结果计算覆盖率、关系召回、路径正确性和延迟。当前图谱在 60 条 golden cases 上总体通过率 93.33%，参数范围召回 95%，芯片子图召回 100%，平均图查询延迟约 5.39ms；PH2A106FLG900 这类核心芯片已经能查到 XCKU5PFFVD900 的 drop-in 替代关系。短板是全量 Chip 节点覆盖约 48%，Alternative 边覆盖约 24%，主要受 PG 中噪声 part number 和部分替代关系两端节点未同步影响；errata 数据目前为空，所以勘误多跳推理还需要补数据。整体上，图谱对参数、子图和核心兼容关系已经可用，但仍需要继续做数据清洗和全量同步来提升覆盖率。
 
-## 9. 后续优化
+## 11. 后续优化
 
 1. 增加全量 PG→Kùzu sync job，确保所有合法 chip 节点进入图谱。
 2. 清理 PG 中非芯片 part number 噪声。
