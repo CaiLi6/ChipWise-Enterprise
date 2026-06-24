@@ -111,6 +111,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "--trace-ids", nargs="*", default=None,
         help="Specific trace_ids (--traces only); overrides --limit",
     )
+    graph = sub.add_parser("graph", help="Run deterministic GraphRAG evaluation")
+    graph.add_argument(
+        "--limit-per-type", type=int, default=20,
+        help="Golden cases to build per graph case type (default: 20)",
+    )
+    graph.add_argument(
+        "--output", default="reports/eval/graphrag_eval_latest.json",
+        help="Output JSON report path",
+    )
     return parser
 
 
@@ -120,6 +129,12 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     args = _build_parser().parse_args(argv)
+
+    if args.cmd == "graph":
+        result = asyncio.run(_run_graph(args.limit_per_type, args.output))
+        json.dump(result, sys.stdout, indent=2, default=str, ensure_ascii=False)
+        sys.stdout.write("\n")
+        return 0
 
     if args.cmd != "run":
         return 1
@@ -133,6 +148,37 @@ def main(argv: list[str] | None = None) -> int:
     json.dump(result, sys.stdout, indent=2, default=str, ensure_ascii=False)
     sys.stdout.write("\n")
     return 0
+
+
+async def _run_graph(limit_per_type: int, output: str) -> dict[str, Any]:
+    """Run deterministic GraphRAG evaluation against PG source + Kùzu graph."""
+    import asyncpg  # type: ignore[import-untyped,import-not-found]
+
+    from src.api.dependencies import get_settings
+    from src.evaluation.graphrag import run_graphrag_evaluation, write_report
+    from src.libs.graph_store.kuzu_store import KuzuGraphStore
+
+    settings = get_settings()
+    db = settings.database
+    pool = await asyncpg.create_pool(
+        host=db.host,
+        port=db.port,
+        database=db.database,
+        user=db.user,
+        password=db.password,
+        min_size=1,
+        max_size=2,
+    )
+    graph = KuzuGraphStore(settings.graph_store.kuzu.db_path, read_only=True)
+    try:
+        result = await run_graphrag_evaluation(pool, graph, limit_per_type=limit_per_type)
+        path = write_report(result, output)
+        payload = result.to_dict()
+        payload["output"] = str(path)
+        return payload
+    finally:
+        await pool.close()
+        graph.close()
 
 
 if __name__ == "__main__":
